@@ -1,0 +1,4 @@
+issues:
+  exclude:
+    - txout\.Rollback.
+
