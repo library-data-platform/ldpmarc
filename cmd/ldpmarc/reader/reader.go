@@ -15,9 +15,10 @@ type Reader struct {
 	rows      *sql.Rows
 	readCount int64
 	total     int64
+	verbose   bool
 }
 
-func NewReader(txin *sql.Tx, tablein string) (*Reader, int64, error) {
+func NewReader(txin *sql.Tx, tablein string, verbose bool) (*Reader, int64, error) {
 	var err error
 	// Read number of input records
 	var total int64
@@ -32,6 +33,7 @@ func NewReader(txin *sql.Tx, tablein string) (*Reader, int64, error) {
 		return nil, 0, err
 	}
 	r.records = []srs.Marc{}
+	r.verbose = verbose
 	return r, total, nil
 }
 
@@ -66,6 +68,9 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			continue
 		}
 		var id string = idN.String
+		if r.verbose {
+			printerr("processing id=%s", id)
+		}
 		if !dataN.Valid {
 			printerr("skipping record: null data at id=%s", id)
 			continue

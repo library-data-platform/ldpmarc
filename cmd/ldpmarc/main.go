@@ -14,11 +14,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 var odbcFilenameFlag = flag.String("f", "", "ODBC data source file name (e.g. \"$HOME/.odbc.ini\")")
 var odbcDSNFlag = flag.String("d", "", "ODBC data source name (DSN)")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
+var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
+var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
 var tablein = "public.srs_marc"
 var tableoutSchema = "folio_source_record"
@@ -29,6 +30,7 @@ var tablefinal = "__marc"
 var odbcFilename string
 var odbcDSN string
 var ldpUser string
+var verbose bool
 var csvFilename string
 var csvFile *os.File
 
@@ -48,6 +50,7 @@ func main() {
 	odbcFilename = *odbcFilenameFlag
 	odbcDSN = *odbcDSNFlag
 	ldpUser = *ldpUserFlag
+	verbose = *verboseFlag
 	csvFilename = *csvFilenameFlag
 	var err error
 	if err = run(); err != nil {
@@ -154,7 +157,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	printerr("reading table \"%s\"", tablein)
 	var r *reader.Reader
 	var inputCount int64
-	if r, inputCount, err = reader.NewReader(txin, tablein); err != nil {
+	if r, inputCount, err = reader.NewReader(txin, tablein, verbose); err != nil {
 		return err
 	} // Deferred r.Close() causes process to hang
 	printerr("processing %d input records", inputCount)
@@ -225,8 +228,6 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 		var id string
 		var m *srs.Marc
 		id, m = r.Values()
-		_ = id
-		_ = m
 		if txout != nil {
 			if _, err = stmt.ExecContext(context.TODO(), id, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return 0, 0, err
