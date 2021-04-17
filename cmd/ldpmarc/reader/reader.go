@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
@@ -64,24 +65,28 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			return false, err
 		}
 		if !idN.Valid {
-			printerr("skipping record: null ID")
+			printerr(skipValue(idN, dataN))
 			continue
 		}
 		var id string = idN.String
 		if r.verbose {
-			printerr("processing id=%s", id)
+			printerr("verbose: read id=%s", id)
+		}
+		if strings.TrimSpace(id) == "" {
+			printerr(skipValue(idN, dataN))
+			continue
 		}
 		if !dataN.Valid {
-			printerr("skipping record: null data at id=%s", id)
+			printerr(skipValue(idN, dataN))
 			continue
 		}
 		var data string = dataN.String
 		if strings.TrimSpace(data) == "" {
-			printerr("skipping record: no data at id=%s", id)
+			printerr(skipValue(idN, dataN))
 			continue
 		}
 		if r.records, err = srs.Transform(data); err != nil {
-			printerr("skipping record: id=%s: %s", id, err)
+			printerr(skipError(idN, err))
 			continue
 		}
 		r.pos = 0
@@ -93,6 +98,26 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 				printerr("processing: %d%%", progress)
 			}
 		}
+	}
+}
+
+func skipValue(idN, dataN sql.NullString) string {
+	return fmt.Sprintf("skipping record: %s", idData(idN, dataN))
+}
+
+func skipError(idN sql.NullString, err error) string {
+	return fmt.Sprintf("skipping record: %s: %s", nullString(idN), err)
+}
+
+func idData(idN, dataN sql.NullString) string {
+	return fmt.Sprintf("id=%s data=%s", nullString(idN), nullString(dataN))
+}
+
+func nullString(s sql.NullString) string {
+	if s.Valid {
+		return s.String
+	} else {
+		return "(null)"
 	}
 }
 

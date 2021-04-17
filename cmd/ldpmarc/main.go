@@ -38,6 +38,10 @@ var program = "ldpmarc"
 
 func main() {
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		printerr("invalid argument: %s", flag.Arg(0))
+		os.Exit(2)
+	}
 	if *helpFlag || *odbcFilenameFlag == "" || *odbcDSNFlag == "" || (*ldpUserFlag == "" && *csvFilenameFlag == "") {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", program)
 		flag.PrintDefaults()
