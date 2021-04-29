@@ -26,15 +26,9 @@ var tablein = "public.srs_marc"
 var tableoutSchema = "folio_source_record"
 var tableoutTable = "__srs_marc"
 var tableout = tableoutSchema + "." + tableoutTable
-var tablefinal = "__marc"
-var tablefinalout = tableoutSchema + "." + tablefinal
+var tablefinalTable = "__marc"
+var tablefinal = tableoutSchema + "." + tablefinalTable
 
-var odbcFilename string
-var odbcDSN string
-var ldpUser string
-var noParallelVacuum bool
-var verbose bool
-var csvFilename string
 var csvFile *os.File
 
 var program = "ldpmarc"
@@ -54,12 +48,6 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	odbcFilename = *odbcFilenameFlag
-	odbcDSN = *odbcDSNFlag
-	ldpUser = *ldpUserFlag
-	noParallelVacuum = *noParallelVacuumFlag
-	verbose = *verboseFlag
-	csvFilename = *csvFilenameFlag
 	var err error
 	if err = run(); err != nil {
 		printerr("%s", err)
@@ -70,23 +58,23 @@ func main() {
 
 func run() error {
 	// Read database configuration
-	viper.SetConfigFile(odbcFilename)
+	viper.SetConfigFile(*odbcFilenameFlag)
 	viper.SetConfigType("ini")
 	var err error
 	var ok bool
 	if err = viper.ReadInConfig(); err != nil {
 		if _, ok = err.(viper.ConfigFileNotFoundError); ok {
-			return fmt.Errorf("file not found: %s", odbcFilename)
+			return fmt.Errorf("file not found: %s", *odbcFilenameFlag)
 		} else {
-			return fmt.Errorf("error reading file: %s: %s", odbcFilename, err)
+			return fmt.Errorf("error reading file: %s: %s", *odbcFilenameFlag, err)
 		}
 	}
-	var host = viper.GetString(odbcDSN + ".Servername")
-	var port = viper.GetString(odbcDSN + ".Port")
-	var user = viper.GetString(odbcDSN + ".UserName")
-	var password = viper.GetString(odbcDSN + ".Password")
-	var dbname = viper.GetString(odbcDSN + ".Database")
-	var sslmode = viper.GetString(odbcDSN + ".SSLMode")
+	var host = viper.GetString(*odbcDSNFlag + ".Servername")
+	var port = viper.GetString(*odbcDSNFlag + ".Port")
+	var user = viper.GetString(*odbcDSNFlag + ".UserName")
+	var password = viper.GetString(*odbcDSNFlag + ".Password")
+	var dbname = viper.GetString(*odbcDSNFlag + ".Database")
+	var sslmode = viper.GetString(*odbcDSNFlag + ".SSLMode")
 	// Open database
 	var db *sql.DB
 	if db, err = openDB(host, port, user, password, dbname, sslmode); err != nil {
@@ -94,23 +82,23 @@ func run() error {
 	}
 	// Begin output transaction
 	var txout *sql.Tx
-	if csvFilename == "" {
+	if *csvFilenameFlag == "" {
 		if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 			return err
 		}
 		defer txout.Rollback()
 	} else {
-		if csvFile, err = os.Create(csvFilename); err != nil {
+		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
 			return err
 		}
 		defer csvFile.Close()
-		printerr("output will be written to file: %s", csvFilename)
+		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
 	if err = process(db, txout); err != nil {
 		return err
 	}
-	if csvFilename == "" {
+	if *csvFilenameFlag == "" {
 		// Index columns
 		if err = index(txout); err != nil {
 			return err
@@ -120,26 +108,26 @@ func run() error {
 			return err
 		}
 		// Grant permission to LDP user
-		if err = grant(txout, ldpUser); err != nil {
+		if err = grant(txout, *ldpUserFlag); err != nil {
 			return err
 		}
 		// Commit
 		if err = txout.Commit(); err != nil {
 			return err
 		}
-		printerr("new table \"" + tablefinalout + "\" is ready to use")
+		printerr("new table \"" + tablefinal + "\" is ready to use")
 		printerr("vacuuming")
 		// Vacuum
 		var q = "VACUUM "
-		if noParallelVacuum {
+		if *noParallelVacuumFlag {
 			q = q + "(PARALLEL 0) "
 		}
-		q = q + tablefinalout + ";"
+		q = q + tablefinal + ";"
 		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return qerror(err, q)
 		}
 		// Analyze
-		q = "ANALYZE " + tablefinalout + ";"
+		q = "ANALYZE " + tablefinal + ";"
 		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return qerror(err, q)
 		}
@@ -174,7 +162,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	printerr("reading table \"%s\"", tablein)
 	var r *reader.Reader
 	var inputCount int64
-	if r, inputCount, err = reader.NewReader(txin, tablein, verbose); err != nil {
+	if r, inputCount, err = reader.NewReader(txin, tablein, *verboseFlag); err != nil {
 		return err
 	} // Deferred r.Close() causes process to hang
 	printerr("processing %d input records", inputCount)
@@ -213,7 +201,7 @@ func setupTable(txout *sql.Tx) error {
 		return qerror(err, q)
 	}
 	q = "" +
-		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinal + " (" +
+		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinalTable + " (" +
 		"    id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
 		"    PRIMARY KEY (id, line)" +
@@ -314,11 +302,11 @@ func indexColumns(txout *sql.Tx, cols []string) error {
 
 func replace(txout *sql.Tx) error {
 	var err error
-	var q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinal + ";"
+	var q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
 	}
-	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinal + ";"
+	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
 	}
@@ -332,7 +320,7 @@ func grant(txout *sql.Tx, user string) error {
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
 	}
-	q = "GRANT SELECT ON " + tableoutSchema + "." + tablefinal + " TO " + user + ";"
+	q = "GRANT SELECT ON " + tableoutSchema + "." + tablefinalTable + " TO " + user + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
 	}
