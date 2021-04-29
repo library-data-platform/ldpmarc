@@ -17,6 +17,7 @@ import (
 var odbcFilenameFlag = flag.String("f", "", "ODBC data source file name (e.g. \"$HOME/.odbc.ini\")")
 var odbcDSNFlag = flag.String("d", "", "ODBC data source name (DSN)")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
+var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later)")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
@@ -26,10 +27,12 @@ var tableoutSchema = "folio_source_record"
 var tableoutTable = "__srs_marc"
 var tableout = tableoutSchema + "." + tableoutTable
 var tablefinal = "__marc"
+var tablefinalout = tableoutSchema + "." + tablefinal
 
 var odbcFilename string
 var odbcDSN string
 var ldpUser string
+var noParallelVacuum bool
 var verbose bool
 var csvFilename string
 var csvFile *os.File
@@ -54,6 +57,7 @@ func main() {
 	odbcFilename = *odbcFilenameFlag
 	odbcDSN = *odbcDSNFlag
 	ldpUser = *ldpUserFlag
+	noParallelVacuum = *noParallelVacuumFlag
 	verbose = *verboseFlag
 	csvFilename = *csvFilenameFlag
 	var err error
@@ -123,10 +127,19 @@ func run() error {
 		if err = txout.Commit(); err != nil {
 			return err
 		}
-		printerr("new table \"" + tableoutSchema + "." + tablefinal + "\" is ready to use")
-		// Vacuum
+		printerr("new table \"" + tablefinalout + "\" is ready to use")
 		printerr("vacuuming")
-		var q = "VACUUM ANALYZE " + tableoutSchema + "." + tablefinal + ";"
+		// Vacuum
+		var q = "VACUUM "
+		if noParallelVacuum {
+			q = q + "(PARALLEL 0) "
+		}
+		q = q + tablefinalout + ";"
+		if _, err = db.ExecContext(context.TODO(), q); err != nil {
+			return qerror(err, q)
+		}
+		// Analyze
+		q = "ANALYZE " + tablefinalout + ";"
 		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return qerror(err, q)
 		}
