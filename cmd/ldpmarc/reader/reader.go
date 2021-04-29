@@ -125,6 +125,7 @@ func (r *Reader) Values() (string, *srs.Marc) {
 	var m srs.Marc = r.records[r.pos]
 	r.pos++
 	return r.id, &srs.Marc{
+		Line:    m.Line,
 		BibID:   m.BibID,
 		Tag:     m.Tag,
 		Ind1:    m.Ind1,

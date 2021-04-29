@@ -186,13 +186,13 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
-		"    __id bigserial NOT NULL," +
 		"    id varchar(36) NOT NULL," +
+		"    line smallint NOT NULL," +
 		"    bib_id varchar(16) NOT NULL," +
 		"    tag varchar(3) NOT NULL," +
 		"    ind1 varchar(1) NOT NULL," +
 		"    ind2 varchar(1) NOT NULL," +
-		"    ord int NOT NULL," +
+		"    ord smallint NOT NULL," +
 		"    sf varchar(1) NOT NULL," +
 		"    content varchar(65535) NOT NULL" +
 		");"
@@ -201,7 +201,9 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinal + " (" +
-		"    __id bigserial PRIMARY KEY" +
+		"    id varchar(36) NOT NULL," +
+		"    line smallint NOT NULL," +
+		"    PRIMARY KEY (id, line)" +
 		");"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
@@ -216,7 +218,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 	var stmt *sql.Stmt
 	if txout != nil {
 		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
-			"id", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
+			"id", "line", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -233,11 +235,11 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 		var m *srs.Marc
 		id, m = r.Values()
 		if txout != nil {
-			if _, err = stmt.ExecContext(context.TODO(), id, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
+			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return 0, 0, err
 			}
 		} else {
-			fmt.Fprintf(csvFile, "%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 		}
 		writeCount++
 	}
@@ -267,12 +269,12 @@ func index(txout *sql.Tx) error {
 	if err != sql.ErrNoRows {
 		suffix = "1"
 	}
-	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (__id);"
+	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (id, line);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return qerror(err, q)
 	}
 	// Index columns
-	var cols = []string{"id", "bib_id", "tag", "ind1", "ind2", "ord", "sf"}
+	var cols = []string{"bib_id", "tag", "ind1", "ind2", "ord", "sf"}
 	if err = indexColumns(txout, cols); err != nil {
 		return err
 	}

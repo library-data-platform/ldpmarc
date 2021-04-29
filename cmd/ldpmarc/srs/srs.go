@@ -6,11 +6,12 @@ import (
 )
 
 type Marc struct {
+	Line    int64
 	BibID   string
 	Tag     string
 	Ind1    string
 	Ind2    string
-	Ord     int32
+	Ord     int64
 	SF      string
 	Content string
 }
@@ -40,8 +41,9 @@ func Transform(data string) ([]Marc, error) {
 	if a, ok = i.([]interface{}); !ok {
 		return nil, fmt.Errorf("parsing: \"fields\" is not an array")
 	}
+	var line int64 = 1
 	var bibID string
-	var tagcounts = make(map[string]int32)
+	var tagcounts = make(map[string]int64)
 	for _, i = range a {
 		if m, ok = i.(map[string]interface{}); !ok {
 			return nil, fmt.Errorf("parsing: \"fields\" element is not an object")
@@ -49,7 +51,7 @@ func Transform(data string) ([]Marc, error) {
 		var t string
 		var ii interface{}
 		for t, ii = range m {
-			var tagc int32 = tagcounts[t] + 1
+			var tagc int64 = tagcounts[t] + 1
 			tagcounts[t] = tagc
 			switch v := ii.(type) {
 			case string:
@@ -57,6 +59,7 @@ func Transform(data string) ([]Marc, error) {
 					bibID = v
 					// Leader (000)
 					mrecs = append(mrecs, Marc{
+						Line:    line,
 						BibID:   bibID,
 						Tag:     "000",
 						Ind1:    "",
@@ -65,8 +68,10 @@ func Transform(data string) ([]Marc, error) {
 						SF:      "",
 						Content: leader,
 					})
+					line++
 				}
 				mrecs = append(mrecs, Marc{
+					Line:    line,
 					BibID:   bibID,
 					Tag:     t,
 					Ind1:    "",
@@ -75,8 +80,9 @@ func Transform(data string) ([]Marc, error) {
 					SF:      "",
 					Content: v,
 				})
+				line++
 			case map[string]interface{}:
-				if err = transformSubfields(&mrecs, bibID, t, tagc, v); err != nil {
+				if err = transformSubfields(&mrecs, &line, bibID, t, tagc, v); err != nil {
 					return nil, fmt.Errorf("parsing: %s", err)
 				}
 			default:
@@ -88,7 +94,7 @@ func Transform(data string) ([]Marc, error) {
 	return mrecs, nil
 }
 
-func transformSubfields(mrecs *[]Marc, bibID string, tag string, ord int32, sm map[string]interface{}) error {
+func transformSubfields(mrecs *[]Marc, line *int64, bibID string, tag string, ord int64, sm map[string]interface{}) error {
 	var ok bool
 	var i interface{}
 	// Ind1
@@ -128,6 +134,7 @@ func transformSubfields(mrecs *[]Marc, bibID string, tag string, ord int32, sm m
 				return fmt.Errorf("parsing: subfield value is not a string")
 			}
 			*mrecs = append(*mrecs, Marc{
+				Line:    *line,
 				BibID:   bibID,
 				Tag:     tag,
 				Ind1:    ind1,
@@ -136,6 +143,7 @@ func transformSubfields(mrecs *[]Marc, bibID string, tag string, ord int32, sm m
 				SF:      k,
 				Content: vs,
 			})
+			(*line)++
 		}
 	}
 
