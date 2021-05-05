@@ -188,7 +188,7 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
-		"    id varchar(36) NOT NULL," +
+		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
 		"    bib_id varchar(16) NOT NULL," +
 		"    tag varchar(3) NOT NULL," +
@@ -203,9 +203,9 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinalTable + " (" +
-		"    id varchar(36) NOT NULL," +
+		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
-		"    PRIMARY KEY (id, line)" +
+		"    PRIMARY KEY (srs_id, line)" +
 		");"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating temp table: %s", err)
@@ -220,7 +220,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 	var stmt *sql.Stmt
 	if txout != nil {
 		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
-			"id", "line", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
+			"srs_id", "line", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
 			return 0, err
 		}
 	}
@@ -275,10 +275,10 @@ func index(txout *sql.Tx) error {
 	if err != sql.ErrNoRows {
 		suffix = "1"
 	}
-	printerr("creating index: id, line")
-	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (id, line);"
+	printerr("creating index: srs_id, line")
+	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (srs_id, line);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating index: id, line: %s", err)
+		return fmt.Errorf("creating index: srs_id, line: %s", err)
 	}
 	return nil
 }
