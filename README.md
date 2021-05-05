@@ -16,8 +16,19 @@ System requirements
 
 * Linux
 * [PostgreSQL](https://www.postgresql.org/) 12.6 or later
+  * required module: pg_trgm
 * [Go](https://golang.org/) 1.16 or later
 * [LDP](https://github.com/library-data-platform/ldp) 1.2 or later
+
+The pg_trgm module is enabled in the database by a superuser:
+
+```sql
+CREATE EXTENSION pg_trgm;
+```
+
+If the pg_trgm extension is not enabled, the `-T` option must be used
+with ldpmarc to disable trigram indexes, and this will impact query
+performance.
 
 
 Building the software
