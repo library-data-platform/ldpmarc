@@ -17,7 +17,8 @@ import (
 var odbcFilenameFlag = flag.String("f", "", "ODBC data source file name (e.g. \"$HOME/.odbc.ini\")")
 var odbcDSNFlag = flag.String("d", "", "ODBC data source name (DSN)")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
-var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later)")
+var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later only)")
+var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
@@ -124,12 +125,12 @@ func run() error {
 		}
 		q = q + tablefinal + ";"
 		if _, err = db.ExecContext(context.TODO(), q); err != nil {
-			return qerror(err, q)
+			return fmt.Errorf("vacuuming:  %s", err)
 		}
 		// Analyze
 		q = "ANALYZE " + tablefinal + ";"
 		if _, err = db.ExecContext(context.TODO(), q); err != nil {
-			return qerror(err, q)
+			return fmt.Errorf("analyzing:  %s", err)
 		}
 	}
 	return nil
@@ -165,9 +166,9 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	if r, inputCount, err = reader.NewReader(txin, tablein, *verboseFlag); err != nil {
 		return err
 	} // Deferred r.Close() causes process to hang
-	printerr("processing %d input records", inputCount)
+	printerr("transforming %d input records", inputCount)
 	var writeCount int64
-	if _, writeCount, err = transform(txout, r); err != nil {
+	if writeCount, err = transform(txout, r); err != nil {
 		return err
 	}
 	r.Close()
@@ -175,7 +176,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	if err = txin.Rollback(); err != nil {
 		return err
 	}
-	printerr("%d output records", writeCount)
+	printerr("%d output rows", writeCount)
 	return nil
 }
 
@@ -183,7 +184,7 @@ func setupTable(txout *sql.Tx) error {
 	var err error
 	var q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("creating schema: %s", err)
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
@@ -198,7 +199,7 @@ func setupTable(txout *sql.Tx) error {
 		"    content varchar(65535) NOT NULL" +
 		");"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("creating table: %s", err)
 	}
 	q = "" +
 		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinalTable + " (" +
@@ -207,12 +208,12 @@ func setupTable(txout *sql.Tx) error {
 		"    PRIMARY KEY (id, line)" +
 		");"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("creating temp table: %s", err)
 	}
 	return nil
 }
 
-func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
+func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 	var writeCount int64
 	var err error
 	// Statement
@@ -220,14 +221,14 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 	if txout != nil {
 		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
 			"id", "line", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 
 	for {
 		var next bool
 		if next, err = r.Next(printerr); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		if !next {
 			break
@@ -237,7 +238,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 		id, m = r.Values()
 		if txout != nil {
 			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
-				return 0, 0, err
+				return 0, err
 			}
 		} else {
 			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
@@ -247,20 +248,24 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, int64, error) {
 
 	if txout != nil {
 		if _, err = stmt.ExecContext(context.TODO()); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		if err = stmt.Close(); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 
-	return r.ReadCount(), writeCount, nil
+	return writeCount, nil
 }
 
 func index(txout *sql.Tx) error {
 	var err error
+	// Index columns
+	var cols = []string{"content", "bib_id", "tag", "ind1", "ind2", "ord", "sf"}
+	if err = indexColumns(txout, cols); err != nil {
+		return err
+	}
 	// Create primary key
-	printerr("creating indexes")
 	var q = "SELECT constraint_name FROM information_schema.table_constraints WHERE constraint_name = '" + tableoutTable + "_pkey' LIMIT 1;"
 	var s string
 	if err = txout.QueryRowContext(context.TODO(), q).Scan(&s); err != nil && err != sql.ErrNoRows {
@@ -270,14 +275,10 @@ func index(txout *sql.Tx) error {
 	if err != sql.ErrNoRows {
 		suffix = "1"
 	}
+	printerr("creating index: id, line")
 	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (id, line);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
-	}
-	// Index columns
-	var cols = []string{"bib_id", "tag", "ind1", "ind2", "ord", "sf"}
-	if err = indexColumns(txout, cols); err != nil {
-		return err
+		return fmt.Errorf("creating index: id, line: %s", err)
 	}
 	return nil
 }
@@ -285,18 +286,23 @@ func index(txout *sql.Tx) error {
 func indexColumns(txout *sql.Tx, cols []string) error {
 	var err error
 	var c string
-	var x int
-	for x, c = range cols {
-		var progress = int(float64(x+1) / float64(len(cols)+1) * 100)
-		if progress > 0 {
-			printerr("creating indexes: %d%%", progress)
-		}
-		var q = "CREATE INDEX ON " + tableout + " (" + c + ");"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-			return qerror(err, q)
+	for _, c = range cols {
+		if c == "content" {
+			if !*noTrigramIndexFlag {
+				printerr("creating index with pg_trgm extension: %s", c)
+				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
+				if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
+				}
+			}
+		} else {
+			printerr("creating index: %s", c)
+			var q = "CREATE INDEX ON " + tableout + " (" + c + ");"
+			if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+				return fmt.Errorf("creating index: %s: %s", c, err)
+			}
 		}
 	}
-	printerr("creating indexes: 100%%")
 	return nil
 }
 
@@ -304,11 +310,11 @@ func replace(txout *sql.Tx) error {
 	var err error
 	var q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("renaming table: %s", err)
 	}
 	return nil
 }
@@ -318,17 +324,13 @@ func grant(txout *sql.Tx, user string) error {
 	// Grant permission to LDP user
 	var q = "GRANT USAGE ON SCHEMA " + tableoutSchema + " TO " + user + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("schema permission: %s", err)
 	}
 	q = "GRANT SELECT ON " + tableoutSchema + "." + tablefinalTable + " TO " + user + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return qerror(err, q)
+		return fmt.Errorf("table permission: %s", err)
 	}
 	return nil
-}
-
-func qerror(err error, q string) error {
-	return fmt.Errorf("%s: %s", err, q)
 }
 
 func printerr(format string, v ...interface{}) {

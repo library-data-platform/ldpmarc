@@ -10,13 +10,12 @@ import (
 )
 
 type Reader struct {
-	pos       int
-	records   []srs.Marc
-	id        string
-	rows      *sql.Rows
-	readCount int64
-	total     int64
-	verbose   bool
+	pos     int
+	records []srs.Marc
+	id      string
+	rows    *sql.Rows
+	total   int64
+	verbose bool
 }
 
 func NewReader(txin *sql.Tx, tablein string, verbose bool) (*Reader, int64, error) {
@@ -53,7 +52,6 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			if err != nil {
 				return false, err
 			}
-			printerr("processing: 100%%")
 			return false, nil
 		}
 		var idN, dataN sql.NullString
@@ -91,13 +89,6 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		}
 		r.pos = 0
 		r.id = id
-		r.readCount++
-		if r.readCount%1000000 == 0 {
-			var progress = int(float64(r.readCount) / float64(r.total) * 100)
-			if progress > 0 {
-				printerr("processing: %d%%", progress)
-			}
-		}
 	}
 }
 
@@ -134,10 +125,6 @@ func (r *Reader) Values() (string, *srs.Marc) {
 		SF:      m.SF,
 		Content: m.Content,
 	}
-}
-
-func (r *Reader) ReadCount() int64 {
-	return r.readCount
 }
 
 func selectCount(txin *sql.Tx, tablein string) (int64, error) {
