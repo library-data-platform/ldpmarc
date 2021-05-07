@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
@@ -14,11 +15,10 @@ type Reader struct {
 	records []srs.Marc
 	id      string
 	rows    *sql.Rows
-	total   int64
 	verbose bool
 }
 
-func NewReader(txin *sql.Tx, tablein string, verbose bool) (*Reader, int64, error) {
+func NewReader(txin *sql.Tx, tablein string, verbose bool, limit int) (*Reader, int64, error) {
 	var err error
 	// Read number of input records
 	var total int64
@@ -27,8 +27,14 @@ func NewReader(txin *sql.Tx, tablein string, verbose bool) (*Reader, int64, erro
 	}
 	// Set up Reader
 	var r = &Reader{}
-	r.total = total
-	var q = "SELECT id, data FROM " + tablein + " ORDER BY id;"
+	var lim string
+	if limit != -1 {
+		lim = " LIMIT " + strconv.Itoa(limit)
+		if int64(limit) < total {
+			total = int64(limit)
+		}
+	}
+	var q = "SELECT id, data FROM " + tablein + " ORDER BY id" + lim + ";"
 	if r.rows, err = txin.QueryContext(context.TODO(), q); err != nil {
 		return nil, 0, err
 	}

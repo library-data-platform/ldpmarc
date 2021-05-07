@@ -19,6 +19,7 @@ var odbcDSNFlag = flag.String("d", "", "ODBC data source name (DSN)")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
 var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later only)")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
+var numberOfRecordsFlag = flag.Int("N", -1, "Number of records to process or -1 for all records")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
@@ -163,7 +164,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	printerr("reading table \"%s\"", tablein)
 	var r *reader.Reader
 	var inputCount int64
-	if r, inputCount, err = reader.NewReader(txin, tablein, *verboseFlag); err != nil {
+	if r, inputCount, err = reader.NewReader(txin, tablein, *verboseFlag, *numberOfRecordsFlag); err != nil {
 		return err
 	} // Deferred r.Close() causes process to hang
 	printerr("transforming %d input records", inputCount)
