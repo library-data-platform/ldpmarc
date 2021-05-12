@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
@@ -14,8 +16,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var odbcFilenameFlag = flag.String("f", "", "ODBC data source file name (e.g. \"$HOME/.odbc.ini\")")
-var odbcDSNFlag = flag.String("d", "", "ODBC data source name (DSN)")
+var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
 var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later only)")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
@@ -41,7 +42,7 @@ func main() {
 		printerr("invalid argument: %s", flag.Arg(0))
 		os.Exit(2)
 	}
-	if *helpFlag || *odbcFilenameFlag == "" || *odbcDSNFlag == "" || (*ldpUserFlag == "" && *csvFilenameFlag == "") {
+	if *helpFlag || *datadirFlag == "" || (*ldpUserFlag == "" && *csvFilenameFlag == "") {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", program)
 		flag.PrintDefaults()
 		if *helpFlag {
@@ -60,23 +61,25 @@ func main() {
 
 func run() error {
 	// Read database configuration
-	viper.SetConfigFile(*odbcFilenameFlag)
-	viper.SetConfigType("ini")
+	var ldpconf = filepath.Join(*datadirFlag, "ldpconf.json")
+	viper.SetConfigFile(ldpconf)
+	viper.SetConfigType("json")
 	var err error
 	var ok bool
 	if err = viper.ReadInConfig(); err != nil {
 		if _, ok = err.(viper.ConfigFileNotFoundError); ok {
-			return fmt.Errorf("file not found: %s", *odbcFilenameFlag)
+			return fmt.Errorf("file not found: %s", ldpconf)
 		} else {
-			return fmt.Errorf("error reading file: %s: %s", *odbcFilenameFlag, err)
+			return fmt.Errorf("error reading file: %s: %s", ldpconf, err)
 		}
 	}
-	var host = viper.GetString(*odbcDSNFlag + ".Servername")
-	var port = viper.GetString(*odbcDSNFlag + ".Port")
-	var user = viper.GetString(*odbcDSNFlag + ".UserName")
-	var password = viper.GetString(*odbcDSNFlag + ".Password")
-	var dbname = viper.GetString(*odbcDSNFlag + ".Database")
-	var sslmode = viper.GetString(*odbcDSNFlag + ".SSLMode")
+	var ldp = "ldp_database"
+	var host = viper.GetString(ldp + ".database_host")
+	var port = strconv.Itoa(viper.GetInt(ldp + ".database_port"))
+	var user = viper.GetString(ldp + ".database_user")
+	var password = viper.GetString(ldp + ".database_password")
+	var dbname = viper.GetString(ldp + ".database_name")
+	var sslmode = viper.GetString(ldp + ".database_sslmode")
 	// Open database
 	var db *sql.DB
 	if db, err = openDB(host, port, user, password, dbname, sslmode); err != nil {

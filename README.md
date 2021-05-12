@@ -18,7 +18,7 @@ System requirements
 * [PostgreSQL](https://www.postgresql.org/) 12.6 or later
   * required module: pg_trgm
 * [Go](https://golang.org/) 1.16 or later
-* [LDP](https://github.com/library-data-platform/ldp) 1.2
+* [LDP](https://github.com/library-data-platform/ldp) 1.3 or later
 
 The pg_trgm module is enabled in the database by a superuser:
 
@@ -61,18 +61,17 @@ Running ldpmarc
 The most common usage is:
 
 ```bash
-ldpmarc -f <odbc_file> -d <dsn> -u <ldp_user>
+ldpmarc -D <datadir> -u <ldp_user>
 ```
 
-where `odbc_file` is an ODBC data source file name such as
-`$HOME/.odbc.ini` or `/etc/odbc.ini`, `dsn` is the ODBC data source
-name for the LDP database, and `ldp_user` is the LDP user to be
-granted select privileges on the output table.
+where `datadir` is an LDP data directory containing `ldpconf.json`,
+and `ldp_user` is the LDP user to be granted select privileges on the
+output table.
 
 For example:
 
 ```bash
-$ ldpmarc -f ~/.odbc.ini -d ldp_db -u ldp
+$ ldpmarc -D ldp_data -u ldp
 ```
 
 SRS MARC data are read from the database table `public.srs_marc` and
