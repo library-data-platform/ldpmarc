@@ -18,7 +18,7 @@ System requirements
 * [PostgreSQL](https://www.postgresql.org/) 12.6 or later
   * required module: pg_trgm
 * [Go](https://golang.org/) 1.16 or later
-* [LDP](https://github.com/library-data-platform/ldp) 1.2 or later
+* [LDP](https://github.com/library-data-platform/ldp) 1.2
 
 The pg_trgm module is enabled in the database by a superuser:
 
