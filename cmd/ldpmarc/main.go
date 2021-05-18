@@ -243,7 +243,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 		var m *srs.Marc
 		id, matchedID, m = r.Values()
 		if txout != nil {
-			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
+			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, matchedID, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return 0, err
 			}
 		} else {
@@ -267,7 +267,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 func index(txout *sql.Tx) error {
 	var err error
 	// Index columns
-	var cols = []string{"content", "bib_id", "tag", "ind1", "ind2", "ord", "sf"}
+	var cols = []string{"content", "matched_id", "bib_id", "tag", "ind1", "ind2", "ord", "sf"}
 	if err = indexColumns(txout, cols); err != nil {
 		return err
 	}
