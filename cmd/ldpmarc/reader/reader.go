@@ -11,12 +11,13 @@ import (
 )
 
 type Reader struct {
-	pos       int
-	records   []srs.Marc
-	id        string
-	matchedID string
-	rows      *sql.Rows
-	verbose   bool
+	pos          int
+	records      []srs.Marc
+	id           string
+	matchedID    string
+	instanceHRID string
+	rows         *sql.Rows
+	verbose      bool
 }
 
 func NewReader(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool, limit int) (*Reader, int64, error) {
@@ -35,7 +36,7 @@ func NewReader(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool, li
 			total = int64(limit)
 		}
 	}
-	var q = "SELECT r.id, r.matched_id, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
+	var q = "SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
 	if r.rows, err = txin.QueryContext(context.TODO(), q); err != nil {
 		return nil, 0, err
 	}
@@ -61,8 +62,8 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			}
 			return false, nil
 		}
-		var idN, matchedIDN, stateN, dataN sql.NullString
-		if err = r.rows.Scan(&idN, &matchedIDN, &stateN, &dataN); err != nil {
+		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
+		if err = r.rows.Scan(&idN, &matchedIDN, &instanceHRIDN, &stateN, &dataN); err != nil {
 			return false, err
 		}
 		err = r.rows.Err()
@@ -94,6 +95,10 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		if !matchedIDN.Valid {
 			matchedID = ""
 		}
+		var instanceHRID string = instanceHRIDN.String
+		if !instanceHRIDN.Valid {
+			instanceHRID = ""
+		}
 		var state string = stateN.String
 		if !stateN.Valid {
 			state = ""
@@ -105,6 +110,7 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		r.pos = 0
 		r.id = id
 		r.matchedID = matchedID
+		r.instanceHRID = instanceHRID
 	}
 }
 
@@ -128,11 +134,12 @@ func nullString(s sql.NullString) string {
 	}
 }
 
-func (r *Reader) Values() (string, string, *srs.Marc) {
+func (r *Reader) Values() (string, string, string, *srs.Marc) {
 	var m srs.Marc = r.records[r.pos]
 	r.pos++
 	return r.id,
 		r.matchedID,
+		r.instanceHRID,
 		&srs.Marc{
 			Line:    m.Line,
 			BibID:   m.BibID,
