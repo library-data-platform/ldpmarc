@@ -35,7 +35,7 @@ func NewReader(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool, li
 			total = int64(limit)
 		}
 	}
-	var q = "SELECT r.id, r.matched_id, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
+	var q = "SELECT r.id, r.matched_id, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
 	if r.rows, err = txin.QueryContext(context.TODO(), q); err != nil {
 		return nil, 0, err
 	}
@@ -61,8 +61,8 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			}
 			return false, nil
 		}
-		var idN, matchedIDN, dataN sql.NullString
-		if err = r.rows.Scan(&idN, &matchedIDN, &dataN); err != nil {
+		var idN, matchedIDN, stateN, dataN sql.NullString
+		if err = r.rows.Scan(&idN, &matchedIDN, &stateN, &dataN); err != nil {
 			return false, err
 		}
 		err = r.rows.Err()
@@ -94,7 +94,11 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		if !matchedIDN.Valid {
 			matchedID = ""
 		}
-		if r.records, err = srs.Transform(data); err != nil {
+		var state string = stateN.String
+		if !stateN.Valid {
+			state = ""
+		}
+		if r.records, err = srs.Transform(data, state); err != nil {
 			printerr(skipError(idN, err))
 			continue
 		}

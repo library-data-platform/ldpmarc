@@ -75,10 +75,14 @@ $ ldpmarc -D ldp_data -u ldp
 ```
 
 SRS MARC data are read from the database tables `public.srs_marc` and
-`public.srs_records`, and transformed into tabular data.  The output
-is written to the table `folio_source_record.__marc`.
+`public.srs_records`, and transformed into tabular data.  Only records
+considered to be current are transformed, where current is defined as
+having state = `ACTUAL` and a non-null identifier present in `999$i`.
 
-The process can take a long time to run and uses a lot of disk space
+The transformed output is written to the table
+`folio_source_record.__marc`.
+
+This process can take a long time to run and uses a lot of disk space
 in the database.  In some libraries the output table may contain more
 than 500 million rows and ldpmarc could use 200 GB of disk space or
 more during the data loading process.

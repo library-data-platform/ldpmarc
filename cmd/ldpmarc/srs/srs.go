@@ -16,7 +16,7 @@ type Marc struct {
 	Content string
 }
 
-func Transform(data string) ([]Marc, error) {
+func Transform(data string, state string) ([]Marc, error) {
 	var mrecs = []Marc{}
 	var err error
 	var i interface{}
@@ -91,6 +91,9 @@ func Transform(data string) ([]Marc, error) {
 
 		}
 	}
+	if !isCurrent(mrecs, state) {
+		return []Marc{}, nil
+	}
 	return mrecs, nil
 }
 
@@ -161,4 +164,17 @@ func parseLeader(m map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("\"leader\" is not a string")
 	}
 	return s, nil
+}
+
+func isCurrent(mrecs []Marc, state string) bool {
+	if state != "ACTUAL" {
+		return false
+	}
+	var rec Marc
+	for _, rec = range mrecs {
+		if rec.Tag == "999" && rec.SF == "i" && rec.Content != "" {
+			return true
+		}
+	}
+	return false
 }
