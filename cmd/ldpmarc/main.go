@@ -251,7 +251,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 				return 0, err
 			}
 		} else {
-			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 		}
 		writeCount++
 	}
