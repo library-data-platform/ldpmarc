@@ -74,10 +74,9 @@ For example:
 $ ldpmarc -D ldp_data -u ldp
 ```
 
-SRS MARC data are read from the database table `public.srs_marc` and
-transformed into tabular data, in a format similar to one used at the
-University of Chicago.  The output is written to the table
-`folio_source_record.__marc`.
+SRS MARC data are read from the database tables `public.srs_marc` and
+`public.srs_records`, and transformed into tabular data.  The output
+is written to the table `folio_source_record.__marc`.
 
 The process can take a long time to run and uses a lot of disk space
 in the database.  In some libraries the output table may contain more

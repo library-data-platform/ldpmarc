@@ -11,18 +11,19 @@ import (
 )
 
 type Reader struct {
-	pos     int
-	records []srs.Marc
-	id      string
-	rows    *sql.Rows
-	verbose bool
+	pos       int
+	records   []srs.Marc
+	id        string
+	matchedID string
+	rows      *sql.Rows
+	verbose   bool
 }
 
-func NewReader(txin *sql.Tx, tablein string, verbose bool, limit int) (*Reader, int64, error) {
+func NewReader(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool, limit int) (*Reader, int64, error) {
 	var err error
 	// Read number of input records
 	var total int64
-	if total, err = selectCount(txin, tablein); err != nil {
+	if total, err = selectCount(txin, srsRecords); err != nil {
 		return nil, 0, err
 	}
 	// Set up Reader
@@ -34,7 +35,7 @@ func NewReader(txin *sql.Tx, tablein string, verbose bool, limit int) (*Reader, 
 			total = int64(limit)
 		}
 	}
-	var q = "SELECT id, data FROM " + tablein + " ORDER BY id" + lim + ";"
+	var q = "SELECT r.id, r.matched_id, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
 	if r.rows, err = txin.QueryContext(context.TODO(), q); err != nil {
 		return nil, 0, err
 	}
@@ -60,8 +61,8 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			}
 			return false, nil
 		}
-		var idN, dataN sql.NullString
-		if err = r.rows.Scan(&idN, &dataN); err != nil {
+		var idN, matchedIDN, dataN sql.NullString
+		if err = r.rows.Scan(&idN, &matchedIDN, &dataN); err != nil {
 			return false, err
 		}
 		err = r.rows.Err()
@@ -89,12 +90,17 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 			printerr(skipValue(idN, dataN))
 			continue
 		}
+		var matchedID string = matchedIDN.String
+		if !matchedIDN.Valid {
+			matchedID = ""
+		}
 		if r.records, err = srs.Transform(data); err != nil {
 			printerr(skipError(idN, err))
 			continue
 		}
 		r.pos = 0
 		r.id = id
+		r.matchedID = matchedID
 	}
 }
 
@@ -118,19 +124,21 @@ func nullString(s sql.NullString) string {
 	}
 }
 
-func (r *Reader) Values() (string, *srs.Marc) {
+func (r *Reader) Values() (string, string, *srs.Marc) {
 	var m srs.Marc = r.records[r.pos]
 	r.pos++
-	return r.id, &srs.Marc{
-		Line:    m.Line,
-		BibID:   m.BibID,
-		Tag:     m.Tag,
-		Ind1:    m.Ind1,
-		Ind2:    m.Ind2,
-		Ord:     m.Ord,
-		SF:      m.SF,
-		Content: m.Content,
-	}
+	return r.id,
+		r.matchedID,
+		&srs.Marc{
+			Line:    m.Line,
+			BibID:   m.BibID,
+			Tag:     m.Tag,
+			Ind1:    m.Ind1,
+			Ind2:    m.Ind2,
+			Ord:     m.Ord,
+			SF:      m.SF,
+			Content: m.Content,
+		}
 }
 
 func selectCount(txin *sql.Tx, tablein string) (int64, error) {

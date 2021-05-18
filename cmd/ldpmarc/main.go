@@ -25,7 +25,8 @@ var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
-var tablein = "public.srs_marc"
+var srsRecords = "public.srs_records"
+var srsMarc = "public.srs_marc"
 var tableoutSchema = "folio_source_record"
 var tableoutTable = "__srs_marc"
 var tableout = tableoutSchema + "." + tableoutTable
@@ -164,10 +165,10 @@ func process(db *sql.DB, txout *sql.Tx) error {
 		return err
 	} // Deferred txin.Rollback() causes process to hang
 	// Start reader
-	printerr("reading table \"%s\"", tablein)
+	printerr("reading tables: %s %s", srsMarc, srsRecords)
 	var r *reader.Reader
 	var inputCount int64
-	if r, inputCount, err = reader.NewReader(txin, tablein, *verboseFlag, *numberOfRecordsFlag); err != nil {
+	if r, inputCount, err = reader.NewReader(txin, srsRecords, srsMarc, *verboseFlag, *numberOfRecordsFlag); err != nil {
 		return err
 	} // Deferred r.Close() causes process to hang
 	printerr("transforming %d input records", inputCount)
@@ -194,6 +195,7 @@ func setupTable(txout *sql.Tx) error {
 		"CREATE TABLE " + tableout + " (" +
 		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
+		"    matched_id varchar(36) NOT NULL," +
 		"    bib_id varchar(16) NOT NULL," +
 		"    tag varchar(3) NOT NULL," +
 		"    ind1 varchar(1) NOT NULL," +
@@ -224,7 +226,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 	var stmt *sql.Stmt
 	if txout != nil {
 		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
-			"srs_id", "line", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
+			"srs_id", "line", "matched_id", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
 			return 0, err
 		}
 	}
@@ -237,15 +239,15 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 		if !next {
 			break
 		}
-		var id string
+		var id, matchedID string
 		var m *srs.Marc
-		id, m = r.Values()
+		id, matchedID, m = r.Values()
 		if txout != nil {
 			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return 0, err
 			}
 		} else {
-			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 		}
 		writeCount++
 	}
