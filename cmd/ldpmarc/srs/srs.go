@@ -8,7 +8,7 @@ import (
 type Marc struct {
 	Line    int64
 	BibID   string
-	Tag     string
+	Field   string
 	Ind1    string
 	Ind2    string
 	Ord     int64
@@ -43,7 +43,7 @@ func Transform(data string, state string) ([]Marc, string, error) {
 	}
 	var line int64 = 1
 	var bibID string
-	var tagcounts = make(map[string]int64)
+	var fieldCounts = make(map[string]int64)
 	for _, i = range a {
 		if m, ok = i.(map[string]interface{}); !ok {
 			return nil, "", fmt.Errorf("parsing: \"fields\" element is not an object")
@@ -51,8 +51,8 @@ func Transform(data string, state string) ([]Marc, string, error) {
 		var t string
 		var ii interface{}
 		for t, ii = range m {
-			var tagc int64 = tagcounts[t] + 1
-			tagcounts[t] = tagc
+			var fieldC int64 = fieldCounts[t] + 1
+			fieldCounts[t] = fieldC
 			switch v := ii.(type) {
 			case string:
 				if t == "001" {
@@ -61,10 +61,10 @@ func Transform(data string, state string) ([]Marc, string, error) {
 					mrecs = append(mrecs, Marc{
 						Line:    line,
 						BibID:   bibID,
-						Tag:     "000",
+						Field:   "000",
 						Ind1:    "",
 						Ind2:    "",
-						Ord:     tagc,
+						Ord:     fieldC,
 						SF:      "",
 						Content: leader,
 					})
@@ -73,20 +73,20 @@ func Transform(data string, state string) ([]Marc, string, error) {
 				mrecs = append(mrecs, Marc{
 					Line:    line,
 					BibID:   bibID,
-					Tag:     t,
+					Field:   t,
 					Ind1:    "",
 					Ind2:    "",
-					Ord:     tagc,
+					Ord:     fieldC,
 					SF:      "",
 					Content: v,
 				})
 				line++
 			case map[string]interface{}:
-				if err = transformSubfields(&mrecs, &line, bibID, t, tagc, v); err != nil {
+				if err = transformSubfields(&mrecs, &line, bibID, t, fieldC, v); err != nil {
 					return nil, "", fmt.Errorf("parsing: %s", err)
 				}
 			default:
-				return nil, "", fmt.Errorf("parsing: unknown data type in tag \"" + t + "\"")
+				return nil, "", fmt.Errorf("parsing: unknown data type in field \"" + t + "\"")
 			}
 
 		}
@@ -98,7 +98,7 @@ func Transform(data string, state string) ([]Marc, string, error) {
 	return mrecs, instanceID, nil
 }
 
-func transformSubfields(mrecs *[]Marc, line *int64, bibID string, tag string, ord int64, sm map[string]interface{}) error {
+func transformSubfields(mrecs *[]Marc, line *int64, bibID string, field string, ord int64, sm map[string]interface{}) error {
 	var ok bool
 	var i interface{}
 	// Ind1
@@ -140,7 +140,7 @@ func transformSubfields(mrecs *[]Marc, line *int64, bibID string, tag string, or
 			*mrecs = append(*mrecs, Marc{
 				Line:    *line,
 				BibID:   bibID,
-				Tag:     tag,
+				Field:   field,
 				Ind1:    ind1,
 				Ind2:    ind2,
 				Ord:     ord,
@@ -170,7 +170,7 @@ func parseLeader(m map[string]interface{}) (string, error) {
 func getInstanceID(mrecs []Marc) string {
 	var rec Marc
 	for _, rec = range mrecs {
-		if rec.Tag == "999" && rec.SF == "i" && rec.Content != "" {
+		if rec.Field == "999" && rec.SF == "i" && rec.Content != "" {
 			return rec.Content
 		}
 	}

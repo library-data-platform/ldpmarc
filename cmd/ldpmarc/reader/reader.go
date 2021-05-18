@@ -147,7 +147,7 @@ func (r *Reader) Values() (string, string, string, string, *srs.Marc) {
 		&srs.Marc{
 			Line:    m.Line,
 			BibID:   m.BibID,
-			Tag:     m.Tag,
+			Field:   m.Field,
 			Ind1:    m.Ind1,
 			Ind2:    m.Ind2,
 			Ord:     m.Ord,
