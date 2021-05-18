@@ -77,7 +77,7 @@ $ ldpmarc -D ldp_data -u ldp
 SRS MARC data are read from the database tables `public.srs_marc` and
 `public.srs_records`, and transformed into tabular data.  Only records
 considered to be current are transformed, where current is defined as
-having state = `ACTUAL` and a non-null identifier present in `999$i`.
+having state = `ACTUAL` and an identifier present in `999$i`.
 
 The transformed output is written to the table
 `folio_source_record.__marc`.
