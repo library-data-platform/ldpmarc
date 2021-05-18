@@ -16,6 +16,7 @@ type Reader struct {
 	id           string
 	matchedID    string
 	instanceHRID string
+	instanceID   string
 	rows         *sql.Rows
 	verbose      bool
 }
@@ -103,7 +104,8 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		if !stateN.Valid {
 			state = ""
 		}
-		if r.records, err = srs.Transform(data, state); err != nil {
+		var instanceID string
+		if r.records, instanceID, err = srs.Transform(data, state); err != nil {
 			printerr(skipError(idN, err))
 			continue
 		}
@@ -111,6 +113,7 @@ func (r *Reader) Next(printerr func(string, ...interface{})) (bool, error) {
 		r.id = id
 		r.matchedID = matchedID
 		r.instanceHRID = instanceHRID
+		r.instanceID = instanceID
 	}
 }
 
@@ -134,12 +137,13 @@ func nullString(s sql.NullString) string {
 	}
 }
 
-func (r *Reader) Values() (string, string, string, *srs.Marc) {
+func (r *Reader) Values() (string, string, string, string, *srs.Marc) {
 	var m srs.Marc = r.records[r.pos]
 	r.pos++
 	return r.id,
 		r.matchedID,
 		r.instanceHRID,
+		r.instanceID,
 		&srs.Marc{
 			Line:    m.Line,
 			BibID:   m.BibID,

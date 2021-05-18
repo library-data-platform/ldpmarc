@@ -16,37 +16,37 @@ type Marc struct {
 	Content string
 }
 
-func Transform(data string, state string) ([]Marc, error) {
+func Transform(data string, state string) ([]Marc, string, error) {
 	var mrecs = []Marc{}
 	var err error
 	var i interface{}
 	if err = json.Unmarshal([]byte(data), &i); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var ok bool
 	var m map[string]interface{}
 	if m, ok = i.(map[string]interface{}); !ok {
-		return nil, fmt.Errorf("parsing error")
+		return nil, "", fmt.Errorf("parsing error")
 	}
 	// Parse leader
 	var leader string
 	if leader, err = parseLeader(m); err != nil {
-		return nil, fmt.Errorf("parsing: %s", err)
+		return nil, "", fmt.Errorf("parsing: %s", err)
 	}
 	// Fields
 	if i, ok = m["fields"]; !ok {
-		return nil, fmt.Errorf("parsing: \"fields\" not found")
+		return nil, "", fmt.Errorf("parsing: \"fields\" not found")
 	}
 	var a []interface{}
 	if a, ok = i.([]interface{}); !ok {
-		return nil, fmt.Errorf("parsing: \"fields\" is not an array")
+		return nil, "", fmt.Errorf("parsing: \"fields\" is not an array")
 	}
 	var line int64 = 1
 	var bibID string
 	var tagcounts = make(map[string]int64)
 	for _, i = range a {
 		if m, ok = i.(map[string]interface{}); !ok {
-			return nil, fmt.Errorf("parsing: \"fields\" element is not an object")
+			return nil, "", fmt.Errorf("parsing: \"fields\" element is not an object")
 		}
 		var t string
 		var ii interface{}
@@ -83,18 +83,19 @@ func Transform(data string, state string) ([]Marc, error) {
 				line++
 			case map[string]interface{}:
 				if err = transformSubfields(&mrecs, &line, bibID, t, tagc, v); err != nil {
-					return nil, fmt.Errorf("parsing: %s", err)
+					return nil, "", fmt.Errorf("parsing: %s", err)
 				}
 			default:
-				return nil, fmt.Errorf("parsing: unknown data type in tag \"" + t + "\"")
+				return nil, "", fmt.Errorf("parsing: unknown data type in tag \"" + t + "\"")
 			}
 
 		}
 	}
-	if !isCurrent(mrecs, state) {
-		return []Marc{}, nil
+	var instanceID string = getInstanceID(mrecs)
+	if !isCurrent(state, instanceID) {
+		return []Marc{}, "", nil
 	}
-	return mrecs, nil
+	return mrecs, instanceID, nil
 }
 
 func transformSubfields(mrecs *[]Marc, line *int64, bibID string, tag string, ord int64, sm map[string]interface{}) error {
@@ -166,15 +167,16 @@ func parseLeader(m map[string]interface{}) (string, error) {
 	return s, nil
 }
 
-func isCurrent(mrecs []Marc, state string) bool {
-	if state != "ACTUAL" {
-		return false
-	}
+func getInstanceID(mrecs []Marc) string {
 	var rec Marc
 	for _, rec = range mrecs {
 		if rec.Tag == "999" && rec.SF == "i" && rec.Content != "" {
-			return true
+			return rec.Content
 		}
 	}
-	return false
+	return ""
+}
+
+func isCurrent(state string, instanceID string) bool {
+	return state == "ACTUAL" && instanceID != ""
 }
