@@ -199,7 +199,6 @@ func setupTable(txout *sql.Tx) error {
 		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
 		"    matched_id varchar(36) NOT NULL," +
-		"    bib_id varchar(16) NOT NULL," +
 		"    tag varchar(3) NOT NULL," +
 		"    ind1 varchar(1) NOT NULL," +
 		"    ind2 varchar(1) NOT NULL," +
@@ -229,7 +228,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 	var stmt *sql.Stmt
 	if txout != nil {
 		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
-			"srs_id", "line", "matched_id", "bib_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
+			"srs_id", "line", "matched_id", "tag", "ind1", "ind2", "ord", "sf", "content")); err != nil {
 			return 0, err
 		}
 	}
@@ -246,11 +245,11 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 		var m *srs.Marc
 		id, matchedID, m = r.Values()
 		if txout != nil {
-			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, matchedID, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
+			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, matchedID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return 0, err
 			}
 		} else {
-			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, m.BibID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, m.Tag, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 		}
 		writeCount++
 	}
@@ -270,7 +269,7 @@ func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
 func index(txout *sql.Tx) error {
 	var err error
 	// Index columns
-	var cols = []string{"content", "matched_id", "bib_id", "tag", "ind1", "ind2", "ord", "sf"}
+	var cols = []string{"content", "matched_id", "tag", "ind1", "ind2", "ord", "sf"}
 	if err = indexColumns(txout, cols); err != nil {
 		return err
 	}
