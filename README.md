@@ -47,8 +47,8 @@ Then:
 $ ./build.sh
 ```
 
-The `build.sh` script creates a `bin/` subdirectory and builds the 
-`ldpmarc` executable there:
+The `build.sh` script creates a `bin/` subdirectory and builds the
+`ldpmarc` executable there.  To see all command-line options:
 
 ```bash
 $ ./bin/ldpmarc -h
