@@ -79,8 +79,7 @@ SRS MARC data are read from the database tables `public.srs_marc` and
 considered to be current are transformed, where current is defined as
 having state = `ACTUAL` and an identifier present in `999$i`.
 
-The transformed output is written to the table
-`folio_source_record.__marc`.
+The transformed output is written to the table `public.srs_marctab`.
 
 This process can take a long time to run and uses a lot of disk space
 in the database.  In some libraries the output table may contain more

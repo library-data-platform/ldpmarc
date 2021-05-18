@@ -27,10 +27,10 @@ var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
 var srsRecords = "public.srs_records"
 var srsMarc = "public.srs_marc"
-var tableoutSchema = "folio_source_record"
-var tableoutTable = "__srs_marc"
+var tableoutSchema = "public"
+var tableoutTable = "_srs_marctab"
 var tableout = tableoutSchema + "." + tableoutTable
-var tablefinalTable = "__marc"
+var tablefinalTable = "srs_marctab"
 var tablefinal = tableoutSchema + "." + tablefinalTable
 
 var csvFile *os.File
@@ -187,9 +187,12 @@ func process(db *sql.DB, txout *sql.Tx) error {
 
 func setupTable(txout *sql.Tx) error {
 	var err error
-	var q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating schema: %s", err)
+	var q string
+	if tableoutSchema != "public" {
+		q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
+		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+			return fmt.Errorf("creating schema: %s", err)
+		}
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
@@ -314,7 +317,11 @@ func indexColumns(txout *sql.Tx, cols []string) error {
 
 func replace(txout *sql.Tx) error {
 	var err error
-	var q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
+	var q = "DROP TABLE IF EXISTS folio_source_record.__marc;"
+	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("dropping table: %s", err)
+	}
+	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
