@@ -8,11 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
-	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/reader"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/writer"
 	"github.com/spf13/viper"
 )
 
@@ -166,17 +167,18 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	} // Deferred txin.Rollback() causes process to hang
 	// Start reader
 	printerr("reading tables: %s %s", srsMarc, srsRecords)
-	var r *reader.Reader
+	// read number of input records
 	var inputCount int64
-	if r, inputCount, err = reader.NewReader(txin, srsRecords, srsMarc, *verboseFlag, *numberOfRecordsFlag); err != nil {
-		return err
-	} // Deferred r.Close() causes process to hang
-	printerr("transforming %d input records", inputCount)
-	var writeCount int64
-	if writeCount, err = transform(txout, r); err != nil {
+	if inputCount, err = selectCount(txin, srsRecords); err != nil {
 		return err
 	}
-	r.Close()
+	printerr("transforming %d input records", inputCount)
+	// main processing
+	var rch <-chan reader.Record = reader.ReadAll(txin, srsRecords, srsMarc, *verboseFlag, *numberOfRecordsFlag)
+	var writeCount int64
+	if writeCount, err = processAll(txout, rch); err != nil {
+		return err
+	}
 	// Commit
 	if err = txin.Rollback(); err != nil {
 		return err
@@ -223,49 +225,138 @@ func setupTable(txout *sql.Tx) error {
 	return nil
 }
 
-func transform(txout *sql.Tx, r *reader.Reader) (int64, error) {
+func selectCount(txin *sql.Tx, tablein string) (int64, error) {
+	var err error
+	var count int64
+	var q = "SELECT count(*) FROM " + tablein + ";"
+	if err = txin.QueryRowContext(context.TODO(), q).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 	var writeCount int64
 	var err error
-	// Statement
-	var stmt *sql.Stmt
-	if txout != nil {
-		if stmt, err = txout.PrepareContext(context.TODO(), pq.CopyInSchema(tableoutSchema, tableoutTable,
-			"srs_id", "line", "matched_id", "instance_hrid", "instance_id", "field", "ind1", "ind2", "ord", "sf", "content")); err != nil {
-			return 0, err
-		}
-	}
-
+	var wch chan writer.Record
+	var wclosed <-chan error
+	wch, wclosed = writer.WriteAll(txout, tableoutSchema, tableoutTable)
 	for {
-		var next bool
-		if next, err = r.Next(printerr); err != nil {
-			return 0, err
-		}
-		if !next {
+		var inrec reader.Record = <-rch
+		if inrec.Stop {
+			if inrec.Err != nil {
+				return 0, err
+			}
 			break
 		}
 		var id, matchedID, instanceHRID, instanceID string
-		var m *srs.Marc
-		id, matchedID, instanceHRID, instanceID, m = r.Values()
-		if txout != nil {
-			if _, err = stmt.ExecContext(context.TODO(), id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
-				return 0, err
-			}
-		} else {
-			fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+		var mrecs []srs.Marc
+		var skip bool
+		id, matchedID, instanceHRID, instanceID, mrecs, skip = transform(inrec)
+		if skip {
+			continue
 		}
-		writeCount++
+		var m srs.Marc
+		for _, m = range mrecs {
+			if txout != nil {
+				wch <- writer.Record{
+					Close:        false,
+					Stop:         false,
+					Err:          nil,
+					SRSID:        id,
+					Line:         m.Line,
+					MatchedID:    matchedID,
+					InstanceHRID: instanceHRID,
+					InstanceID:   instanceID,
+					Field:        m.Field,
+					Ind1:         m.Ind1,
+					Ind2:         m.Ind2,
+					Ord:          m.Ord,
+					SF:           m.SF,
+					Content:      m.Content,
+				}
+			} else {
+				fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+			}
+			writeCount++
+		}
 	}
 
 	if txout != nil {
-		if _, err = stmt.ExecContext(context.TODO()); err != nil {
-			return 0, err
-		}
-		if err = stmt.Close(); err != nil {
-			return 0, err
+		wch <- writer.Record{Close: true}
+		select {
+		case err = <-wclosed:
+			if err != nil {
+				printerr("%s", err)
+			}
 		}
 	}
 
 	return writeCount, nil
+}
+
+func transform(r reader.Record) (string, string, string, string, []srs.Marc, bool) {
+	if !r.ID.Valid {
+		printerr(skipValue(r.ID, r.Data))
+		return "", "", "", "", nil, true
+	}
+	var id string = r.ID.String
+	if *verboseFlag {
+		printerr("verbose: read id=%s", id)
+	}
+	if strings.TrimSpace(id) == "" {
+		printerr(skipValue(r.ID, r.Data))
+		return "", "", "", "", nil, true
+	}
+	if !r.Data.Valid {
+		printerr(skipValue(r.ID, r.Data))
+		return "", "", "", "", nil, true
+	}
+	var data string = r.Data.String
+	if strings.TrimSpace(data) == "" {
+		printerr(skipValue(r.ID, r.Data))
+		return "", "", "", "", nil, true
+	}
+	var matchedID string = r.MatchedID.String
+	if !r.MatchedID.Valid {
+		matchedID = ""
+	}
+	var instanceHRID string = r.InstanceHRID.String
+	if !r.InstanceHRID.Valid {
+		instanceHRID = ""
+	}
+	var state string = r.State.String
+	if !r.State.Valid {
+		state = ""
+	}
+	var mrecs []srs.Marc
+	var instanceID string
+	var err error
+	if mrecs, instanceID, err = srs.Transform(data, state); err != nil {
+		printerr(skipError(r.ID, err))
+		return "", "", "", "", nil, true
+	}
+	return id, matchedID, instanceHRID, instanceID, mrecs, false
+}
+
+func skipValue(idN, dataN sql.NullString) string {
+	return fmt.Sprintf("skipping record: %s", idData(idN, dataN))
+}
+
+func skipError(idN sql.NullString, err error) string {
+	return fmt.Sprintf("skipping record: %s: %s", nullString(idN), err)
+}
+
+func idData(idN, dataN sql.NullString) string {
+	return fmt.Sprintf("id=%s data=%s", nullString(idN), nullString(dataN))
+}
+
+func nullString(s sql.NullString) string {
+	if s.Valid {
+		return s.String
+	} else {
+		return "(null)"
+	}
 }
 
 func index(txout *sql.Tx) error {
