@@ -58,7 +58,6 @@ func main() {
 		printerr("%s", err)
 		os.Exit(1)
 	}
-	printerr("completed")
 }
 
 func run() error {

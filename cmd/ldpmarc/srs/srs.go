@@ -7,7 +7,6 @@ import (
 
 type Marc struct {
 	Line    int64
-	BibID   string
 	Field   string
 	Ind1    string
 	Ind2    string
@@ -42,7 +41,6 @@ func Transform(data string, state string) ([]Marc, string, error) {
 		return nil, "", fmt.Errorf("parsing: \"fields\" is not an array")
 	}
 	var line int64 = 1
-	var bibID string
 	var fieldCounts = make(map[string]int64)
 	for _, i = range a {
 		if m, ok = i.(map[string]interface{}); !ok {
@@ -56,11 +54,9 @@ func Transform(data string, state string) ([]Marc, string, error) {
 			switch v := ii.(type) {
 			case string:
 				if t == "001" {
-					bibID = v
 					// Leader (000)
 					mrecs = append(mrecs, Marc{
 						Line:    line,
-						BibID:   bibID,
 						Field:   "000",
 						Ind1:    "",
 						Ind2:    "",
@@ -72,7 +68,6 @@ func Transform(data string, state string) ([]Marc, string, error) {
 				}
 				mrecs = append(mrecs, Marc{
 					Line:    line,
-					BibID:   bibID,
 					Field:   t,
 					Ind1:    "",
 					Ind2:    "",
@@ -82,7 +77,7 @@ func Transform(data string, state string) ([]Marc, string, error) {
 				})
 				line++
 			case map[string]interface{}:
-				if err = transformSubfields(&mrecs, &line, bibID, t, fieldC, v); err != nil {
+				if err = transformSubfields(&mrecs, &line, t, fieldC, v); err != nil {
 					return nil, "", fmt.Errorf("parsing: %s", err)
 				}
 			default:
@@ -98,7 +93,7 @@ func Transform(data string, state string) ([]Marc, string, error) {
 	return mrecs, instanceID, nil
 }
 
-func transformSubfields(mrecs *[]Marc, line *int64, bibID string, field string, ord int64, sm map[string]interface{}) error {
+func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm map[string]interface{}) error {
 	var ok bool
 	var i interface{}
 	// Ind1
@@ -139,7 +134,6 @@ func transformSubfields(mrecs *[]Marc, line *int64, bibID string, field string, 
 			}
 			*mrecs = append(*mrecs, Marc{
 				Line:    *line,
-				BibID:   bibID,
 				Field:   field,
 				Ind1:    ind1,
 				Ind2:    ind2,
