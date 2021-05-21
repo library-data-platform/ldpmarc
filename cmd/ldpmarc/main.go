@@ -283,11 +283,9 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 
 	if txout != nil {
 		wch <- writer.Record{Close: true}
-		select {
-		case err = <-wclosed:
-			if err != nil {
-				printerr("%s", err)
-			}
+		err = <-wclosed
+		if err != nil {
+			return 0, err
 		}
 	}
 
