@@ -60,7 +60,7 @@ echo 'build.sh: compiling ldpmarc' 1>&2
 mkdir -p $bindir
 
 command=ldpmarc
-go build $v -o $bindir ./cmd/$command
+go build -o $bindir $v -race ./cmd/$command
 
 echo 'build.sh: compiled to executable in bin' 1>&2
 
