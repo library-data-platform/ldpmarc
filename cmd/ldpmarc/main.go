@@ -239,7 +239,9 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 	var err error
 	var wch chan writer.Record
 	var wclosed <-chan error
-	wch, wclosed = writer.WriteAll(txout, tableoutSchema, tableoutTable)
+	if txout != nil {
+		wch, wclosed = writer.WriteAll(txout, tableoutSchema, tableoutTable)
+	}
 	for {
 		var inrec reader.Record = <-rch
 		if inrec.Stop {
