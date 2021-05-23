@@ -44,7 +44,6 @@ if $verbose_f; then
 fi
 
 if $lint_f; then
-    echo 'build.sh: linting' 1>&2
     pkg=ldpmarc
     go vet $v ./cmd/$pkg 1>&2
 fi
@@ -52,11 +51,8 @@ fi
 bindir=bin
 
 if $clean_f; then
-    echo 'build.sh: removing executable' 1>&2
     rm -f ./$bindir/ldpmarc
 fi
-
-echo 'build.sh: compiling ldpmarc' 1>&2
 
 mkdir -p $bindir
 
