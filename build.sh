@@ -2,7 +2,7 @@
 set -e
 
 clean_f='false'
-lint_f='true'
+lint_f='false'
 verbose_f='false'
 
 usage() {
@@ -12,16 +12,16 @@ usage() {
 	echo 'Flags:'
 	echo '-c                            - Clean (remove executable) before building'
 	echo '-h                            - Help'
-	echo '-L                            - Do not run linters (golangci-lint)'
+	echo '-l                            - Run linters (requires golangci-lint)'
 	echo '-v                            - Enable verbose output'
 }
 
-while getopts 'Lchtv' flag; do
+while getopts 'chltv' flag; do
     case "${flag}" in
-        L) lint_f='false' ;;
         c) clean_f='true' ;;
         h) usage
             exit 1 ;;
+        l) lint_f='true' ;;
         v) verbose_f='true' ;;
         *) usage
             exit 1 ;;
