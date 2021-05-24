@@ -212,11 +212,11 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
-		"    srs_id uuid NOT NULL," +
+		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
-		"    matched_id uuid NOT NULL," +
+		"    matched_id varchar(36) NOT NULL," +
 		"    instance_hrid varchar(32) NOT NULL," +
-		"    instance_id uuid NOT NULL," +
+		"    instance_id varchar(36) NOT NULL," +
 		"    field varchar(3) NOT NULL," +
 		"    ind1 varchar(1) NOT NULL," +
 		"    ind2 varchar(1) NOT NULL," +
@@ -229,7 +229,7 @@ func setupTable(txout *sql.Tx) error {
 	}
 	q = "" +
 		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinalTable + " (" +
-		"    srs_id uuid NOT NULL," +
+		"    srs_id varchar(36) NOT NULL," +
 		"    line smallint NOT NULL," +
 		"    PRIMARY KEY (srs_id, line)" +
 		");"

@@ -11,7 +11,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 )
 
-const schemaVersion int64 = 1
+const schemaVersion int64 = 2
 const cksumTable = "dbsystem.ldpmarc_cksum"
 const metadataTableS = "dbsystem"
 const metadataTableT = "ldpmarc_metadata"
@@ -58,7 +58,7 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc string) error {
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	q = "CREATE TABLE " + cksumTable +
-		" AS SELECT r.id::uuid, " + util.MD5() + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
+		" AS SELECT r.id, " + util.MD5() + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
@@ -130,7 +130,7 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func
 func updateNew(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
+	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id = c.id WHERE c.id IS NULL;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating addition table: %s", err)
 	}
@@ -196,7 +196,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx
 func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id::uuid FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
+	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id = c.id WHERE r.id IS NULL;"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
 	}
@@ -224,12 +224,12 @@ func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 		rows.Close()
 	}
 	// delete in finaltable
-	q = "DELETE FROM " + tablefinal + " WHERE srs_id::uuid IN (SELECT id FROM ldpmarc_delete);"
+	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc_delete);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("deleting records: %s", err)
 	}
 	// delete in cksum table
-	q = "DELETE FROM " + cksumTable + " WHERE id::uuid IN (SELECT id FROM ldpmarc_delete);"
+	q = "DELETE FROM " + cksumTable + " WHERE id IN (SELECT id FROM ldpmarc_delete);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("deleting cksum: %s", err)
 	}
@@ -239,7 +239,7 @@ func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 func updateChange(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find changed data
-	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5() + " <> c.cksum;"
+	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5() + " <> c.cksum;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating change table: %s", err)
 	}
@@ -314,8 +314,8 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 
 func filterQuery(srsRecords, srsMarc, filter string) string {
 	return "" +
-		"SELECT r.id::uuid, r.matched_id, r.instance_hrid, r.state, m.data, " + util.MD5() + " cksum " +
+		"SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data, " + util.MD5() + " cksum " +
 		"    FROM " + srsRecords + " r " +
-		"        JOIN " + filter + " f ON r.id::uuid = f.id " +
+		"        JOIN " + filter + " f ON r.id = f.id " +
 		"        JOIN " + srsMarc + " m ON r.id = m.id;"
 }
