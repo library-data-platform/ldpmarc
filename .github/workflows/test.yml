@@ -5,10 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: install linter
+      run: GOPATH=$HOME/go curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.39.0
     - name: install golang dependencies
       run: go mod tidy
     - name: lint and build
-      run: PATH=$PATH:$HOME/go/bin ./build.sh
+      run: PATH=$PATH:$HOME/go/bin ./build.sh -l
     - name: run
       run: ./bin/ldpmarc -h
 
