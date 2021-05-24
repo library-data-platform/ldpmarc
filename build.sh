@@ -57,7 +57,7 @@ fi
 mkdir -p $bindir
 
 pkg=ldpmarc
-go build -o $bindir $v -race ./cmd/$pkg
+go build -o $bindir $v ./cmd/$pkg
 
 echo 'build.sh: compiled to executable in bin' 1>&2
 
