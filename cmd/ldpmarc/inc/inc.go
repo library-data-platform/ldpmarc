@@ -206,7 +206,7 @@ func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 	}
 	// show changes
 	if verbose {
-		q = "SELECT id FROM ldpmarc_delete ORDER BY id;"
+		q = "SELECT id FROM ldpmarc_delete;"
 		var rows *sql.Rows
 		if rows, err = txout.QueryContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("reading deletion list: %s", err)
@@ -317,6 +317,5 @@ func filterQuery(srsRecords, srsMarc, filter string) string {
 		"SELECT r.id::uuid, r.matched_id, r.instance_hrid, r.state, m.data, " + util.MD5() + " cksum " +
 		"    FROM " + srsRecords + " r " +
 		"        JOIN " + filter + " f ON r.id::uuid = f.id " +
-		"        JOIN " + srsMarc + " m ON r.id = m.id " +
-		"    ORDER BY r.id;"
+		"        JOIN " + srsMarc + " m ON r.id = m.id;"
 }
