@@ -98,6 +98,7 @@ func run() error {
 			return err
 		}
 	} else {
+		printerr("full update")
 		if err = fullUpdate(db); err != nil {
 			return err
 		}
@@ -181,8 +182,6 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	if txin, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	} // Deferred txin.Rollback() causes process to hang
-	// Start reader
-	printerr("reading tables: %s %s", srsMarc, srsRecords)
 	// read number of input records
 	var inputCount int64
 	if inputCount, err = selectCount(txin, srsRecords); err != nil {
