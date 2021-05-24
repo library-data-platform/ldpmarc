@@ -2,7 +2,7 @@
 set -e
 
 clean_f='false'
-lint_f='false'
+lint_f='true'
 verbose_f='false'
 
 usage() {
@@ -12,16 +12,16 @@ usage() {
 	echo 'Flags:'
 	echo '-c                            - Clean (remove executable) before building'
 	echo '-h                            - Help'
-	echo '-l                            - Run linters (requires golangci-lint)'
+	echo '-L                            - Do not run linter'
 	echo '-v                            - Enable verbose output'
 }
 
-while getopts 'chltv' flag; do
+while getopts 'Lchtv' flag; do
     case "${flag}" in
+        L) lint_f='false' ;;
         c) clean_f='true' ;;
         h) usage
             exit 1 ;;
-        l) lint_f='true' ;;
         v) verbose_f='true' ;;
         *) usage
             exit 1 ;;
@@ -44,23 +44,20 @@ if $verbose_f; then
 fi
 
 if $lint_f; then
-    echo 'build.sh: running linters' 1>&2
-    golangci-lint run $v 1>&2
+    pkg=ldpmarc
+    go vet $v ./cmd/$pkg 1>&2
 fi
 
 bindir=bin
 
 if $clean_f; then
-    echo 'build.sh: removing executable' 1>&2
     rm -f ./$bindir/ldpmarc
 fi
 
-echo 'build.sh: compiling ldpmarc' 1>&2
-
 mkdir -p $bindir
 
-command=ldpmarc
-go build -o $bindir $v -race ./cmd/$command
+pkg=ldpmarc
+go build -o $bindir $v -race ./cmd/$pkg
 
 echo 'build.sh: compiled to executable in bin' 1>&2
 

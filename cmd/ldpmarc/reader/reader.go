@@ -3,7 +3,6 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"strconv"
 )
 
 type Record struct {
@@ -16,13 +15,9 @@ type Record struct {
 	Data         sql.NullString
 }
 
-func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool, limit int) <-chan Record {
+func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool) <-chan Record {
 	var ch = make(chan Record, 1000)
-	var lim string
-	if limit != -1 {
-		lim = " LIMIT " + strconv.Itoa(limit)
-	}
-	var q = "SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id" + lim + ";"
+	var q = "SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id ORDER BY r.id;"
 	var rows *sql.Rows
 	var err error
 	if rows, err = txin.QueryContext(context.TODO(), q); err != nil {
@@ -50,7 +45,7 @@ func scanAll(rows *sql.Rows, ch chan Record) {
 			ch <- Record{Stop: true, Err: err}
 			return
 		}
-		if err = rows.Err(); err != nil {
+		if err = rows.Err(); err != nil { // this check may be unnecessary
 			ch <- Record{Stop: true, Err: err}
 			return
 		}

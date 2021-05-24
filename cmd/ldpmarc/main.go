@@ -8,20 +8,22 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	_ "github.com/lib/pq"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/reader"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/writer"
 	"github.com/spf13/viper"
 )
 
+//var fullUpdateFlag = flag.Bool("f", false, "Force full update, even if incremental update is available")
+var incUpdateFlag = flag.Bool("i", false, "Use incremental update if possible (experimental)")
 var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
 var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later only)")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
-var numberOfRecordsFlag = flag.Int("N", -1, "Number of records to process or -1 for all records")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
@@ -86,6 +88,35 @@ func run() error {
 	if db, err = openDB(host, port, user, password, dbname, sslmode); err != nil {
 		return err
 	}
+	var incUpdateAvail bool
+	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
+		return err
+	}
+	if *incUpdateFlag && incUpdateAvail /* && !*fullUpdateFlag */ && *csvFilenameFlag == "" {
+		printerr("incremental update (experimental)")
+		if err = inc.IncUpdate(db, srsRecords, srsMarc, tablefinal, *noParallelVacuumFlag, printerr, *verboseFlag); err != nil {
+			return err
+		}
+	} else {
+		if err = fullUpdate(db); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func openDB(host, port, user, password, dbname, sslmode string) (*sql.DB, error) {
+	var connstr = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=" + sslmode
+	var err error
+	var db *sql.DB
+	if db, err = sql.Open("postgres", connstr); err != nil {
+		return nil, fmt.Errorf("unable to open database: %s: %s", dbname, err)
+	}
+	return db, nil
+}
+
+func fullUpdate(db *sql.DB) error {
+	var err error
 	// Begin output transaction
 	var txout *sql.Tx
 	if *csvFilenameFlag == "" {
@@ -122,33 +153,19 @@ func run() error {
 			return err
 		}
 		printerr("new table is ready to use: " + tablefinal)
+		printerr("writing checksums")
+		if err = inc.CreateCksum(db, srsRecords, srsMarc); err != nil {
+			return err
+		}
 		printerr("vacuuming")
-		// Vacuum
-		var q = "VACUUM "
-		if *noParallelVacuumFlag {
-			q = q + "(PARALLEL 0) "
+		if err = util.VacuumAnalyze(db, tablefinal, *noParallelVacuumFlag); err != nil {
+			return err
 		}
-		q = q + tablefinal + ";"
-		if _, err = db.ExecContext(context.TODO(), q); err != nil {
-			return fmt.Errorf("vacuuming:  %s", err)
-		}
-		// Analyze
-		q = "ANALYZE " + tablefinal + ";"
-		if _, err = db.ExecContext(context.TODO(), q); err != nil {
-			return fmt.Errorf("analyzing:  %s", err)
+		if err = inc.VacuumCksum(db, *noParallelVacuumFlag); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-func openDB(host, port, user, password, dbname, sslmode string) (*sql.DB, error) {
-	var connstr = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=" + sslmode
-	var err error
-	var db *sql.DB
-	if db, err = sql.Open("postgres", connstr); err != nil {
-		return nil, fmt.Errorf("unable to open database: %s: %s", dbname, err)
-	}
-	return db, nil
 }
 
 func process(db *sql.DB, txout *sql.Tx) error {
@@ -173,7 +190,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
-	var rch <-chan reader.Record = reader.ReadAll(txin, srsRecords, srsMarc, *verboseFlag, *numberOfRecordsFlag)
+	var rch <-chan reader.Record = reader.ReadAll(txin, srsRecords, srsMarc, *verboseFlag)
 	var writeCount int64
 	if writeCount, err = processAll(txout, rch); err != nil {
 		return err
@@ -253,7 +270,7 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 		var id, matchedID, instanceHRID, instanceID string
 		var mrecs []srs.Marc
 		var skip bool
-		id, matchedID, instanceHRID, instanceID, mrecs, skip = transform(inrec)
+		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(inrec, printerr, *verboseFlag)
 		if skip {
 			continue
 		}
@@ -292,70 +309,6 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 	}
 
 	return writeCount, nil
-}
-
-func transform(r reader.Record) (string, string, string, string, []srs.Marc, bool) {
-	if !r.ID.Valid {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
-	}
-	var id string = r.ID.String
-	if *verboseFlag {
-		printerr("verbose: read id=%s", id)
-	}
-	if strings.TrimSpace(id) == "" {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
-	}
-	if !r.Data.Valid {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
-	}
-	var data string = r.Data.String
-	if strings.TrimSpace(data) == "" {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
-	}
-	var matchedID string = r.MatchedID.String
-	if !r.MatchedID.Valid {
-		matchedID = ""
-	}
-	var instanceHRID string = r.InstanceHRID.String
-	if !r.InstanceHRID.Valid {
-		instanceHRID = ""
-	}
-	var state string = r.State.String
-	if !r.State.Valid {
-		state = ""
-	}
-	var mrecs []srs.Marc
-	var instanceID string
-	var err error
-	if mrecs, instanceID, err = srs.Transform(data, state); err != nil {
-		printerr(skipError(r.ID, err))
-		return "", "", "", "", nil, true
-	}
-	return id, matchedID, instanceHRID, instanceID, mrecs, false
-}
-
-func skipValue(idN, dataN sql.NullString) string {
-	return fmt.Sprintf("skipping record: %s", idData(idN, dataN))
-}
-
-func skipError(idN sql.NullString, err error) string {
-	return fmt.Sprintf("skipping record: %s: %s", nullString(idN), err)
-}
-
-func idData(idN, dataN sql.NullString) string {
-	return fmt.Sprintf("id=%s data=%s", nullString(idN), nullString(dataN))
-}
-
-func nullString(s sql.NullString) string {
-	if s.Valid {
-		return s.String
-	} else {
-		return "(null)"
-	}
 }
 
 func index(txout *sql.Tx) error {
