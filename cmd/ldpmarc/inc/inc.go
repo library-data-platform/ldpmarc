@@ -82,18 +82,18 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc string) error {
 	return nil
 }
 
-func VacuumCksum(db *sql.DB, noParallel bool) error {
+func VacuumCksum(db *sql.DB) error {
 	var err error
-	if err = util.VacuumAnalyze(db, cksumTable, noParallel); err != nil {
+	if err = util.VacuumAnalyze(db, cksumTable); err != nil {
 		return err
 	}
-	if err = util.VacuumAnalyze(db, metadataTable, noParallel); err != nil {
+	if err = util.VacuumAnalyze(db, metadataTable); err != nil {
 		return err
 	}
 	return nil
 }
 
-func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, noParallelVacuum bool, printerr func(string, ...interface{}), verbose bool) error {
+func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	var txout *sql.Tx
 	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
@@ -118,10 +118,10 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, noParallelVac
 	}
 	// vacuum
 	printerr("vacuuming")
-	if err = util.VacuumAnalyze(db, tablefinal, noParallelVacuum); err != nil {
+	if err = util.VacuumAnalyze(db, tablefinal); err != nil {
 		return err
 	}
-	if err = VacuumCksum(db, noParallelVacuum); err != nil {
+	if err = VacuumCksum(db); err != nil {
 		return err
 	}
 	return nil

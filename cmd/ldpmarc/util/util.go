@@ -79,21 +79,10 @@ func nullString(s sql.NullString) string {
 	}
 }
 
-func VacuumAnalyze(db *sql.DB, table string, noParallel bool) error {
-	var err error
-	// vacuum
-	var q = "VACUUM "
-	if noParallel {
-		q = q + "(PARALLEL 0) "
-	}
-	q = q + table + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+func VacuumAnalyze(db *sql.DB, table string) error {
+	q := "VACUUM ANALYZE " + table + ";"
+	if _, err := db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("vacuuming table: %s: %s", table, err)
-	}
-	// analyze
-	q = "ANALYZE " + table + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("analyzing table: %s: %s", table, err)
 	}
 	return nil
 }

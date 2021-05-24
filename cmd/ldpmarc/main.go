@@ -22,7 +22,6 @@ import (
 var incUpdateFlag = flag.Bool("i", false, "Use incremental update if possible (experimental)")
 var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
-var noParallelVacuumFlag = flag.Bool("P", false, "Disable parallel vacuum (PostgreSQL 13 or later only)")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
@@ -94,7 +93,7 @@ func run() error {
 	}
 	if *incUpdateFlag && incUpdateAvail /* && !*fullUpdateFlag */ && *csvFilenameFlag == "" {
 		printerr("incremental update (experimental)")
-		if err = inc.IncUpdate(db, srsRecords, srsMarc, tablefinal, *noParallelVacuumFlag, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(db, srsRecords, srsMarc, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -159,10 +158,10 @@ func fullUpdate(db *sql.DB) error {
 			return err
 		}
 		printerr("vacuuming")
-		if err = util.VacuumAnalyze(db, tablefinal, *noParallelVacuumFlag); err != nil {
+		if err = util.VacuumAnalyze(db, tablefinal); err != nil {
 			return err
 		}
-		if err = inc.VacuumCksum(db, *noParallelVacuumFlag); err != nil {
+		if err = inc.VacuumCksum(db); err != nil {
 			return err
 		}
 	}
