@@ -45,7 +45,7 @@ func IncUpdateAvail(db *sql.DB) (bool, error) {
 	return true, nil
 }
 
-func CreateCksum(db *sql.DB, srsRecords, srsMarc string) error {
+func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarcAttr string) error {
 	var err error
 	var tx *sql.Tx
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
@@ -58,7 +58,7 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc string) error {
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	q = "CREATE TABLE " + cksumTable +
-		" AS SELECT r.id, " + util.MD5() + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
+		" AS SELECT r.id, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
@@ -93,7 +93,7 @@ func VacuumCksum(db *sql.DB) error {
 	return nil
 }
 
-func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	var txout *sql.Tx
 	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
@@ -101,7 +101,7 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func
 	}
 	defer txout.Rollback()
 	// add new data
-	if err = updateNew(db, srsRecords, srsMarc, tablefinal, txout, printerr, verbose); err != nil {
+	if err = updateNew(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, txout, printerr, verbose); err != nil {
 		return err
 	}
 	// remove deleted data
@@ -109,7 +109,7 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func
 		return err
 	}
 	// replace modified data
-	if err = updateChange(db, srsRecords, srsMarc, tablefinal, txout, printerr, verbose); err != nil {
+	if err = updateChange(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, txout, printerr, verbose); err != nil {
 		return err
 	}
 	// commit
@@ -127,7 +127,7 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, tablefinal string, printerr func
 	return nil
 }
 
-func updateNew(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
+func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
 	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id = c.id WHERE c.id IS NULL;"
@@ -145,7 +145,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx
 	}
 	defer tx.Rollback()
 	// transform
-	q = filterQuery(srsRecords, srsMarc, "ldpmarc_add")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_add")
 	var rows *sql.Rows
 	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to add: %s", err)
@@ -236,10 +236,10 @@ func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 	return nil
 }
 
-func updateChange(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
+func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find changed data
-	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5() + " <> c.cksum;"
+	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating change table: %s", err)
 	}
@@ -254,7 +254,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 	}
 	defer tx.Rollback()
 	// transform
-	q = filterQuery(srsRecords, srsMarc, "ldpmarc_change")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_change")
 	var rows *sql.Rows
 	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to change: %s", err)
@@ -312,9 +312,9 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 	return nil
 }
 
-func filterQuery(srsRecords, srsMarc, filter string) string {
+func filterQuery(srsRecords, srsMarc, srsMarcAttr, filter string) string {
 	return "" +
-		"SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data, " + util.MD5() + " cksum " +
+		"SELECT r.id, r.matched_id, r.instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
 		"    FROM " + srsRecords + " r " +
 		"        JOIN " + filter + " f ON r.id = f.id " +
 		"        JOIN " + srsMarc + " m ON r.id = m.id;"

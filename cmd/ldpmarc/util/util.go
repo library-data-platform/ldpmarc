@@ -10,9 +10,9 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 )
 
-func MD5() string {
+func MD5(srsMarcAttr string) string {
 	//return "md5(r::text || m::text)"
-	return "md5(coalesce(r.matched_id::text, '') || coalesce(r.instance_hrid::text, '') || coalesce(r.instance_id::text, '') || coalesce(m.data::text, ''))"
+	return "md5(coalesce(r.matched_id::text, '') || coalesce(r.instance_hrid::text, '') || coalesce(r.instance_id::text, '') || coalesce(m." + srsMarcAttr + "::text, ''))"
 }
 
 func Transform(r reader.Record, printerr func(string, ...interface{}), verbose bool) (string, string, string, string, []srs.Marc, bool) {

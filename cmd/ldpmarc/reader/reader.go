@@ -15,9 +15,9 @@ type Record struct {
 	Data         sql.NullString
 }
 
-func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, verbose bool) <-chan Record {
+func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, srsMarcAttr string, verbose bool) <-chan Record {
 	var ch = make(chan Record, 1000)
-	var q = "SELECT r.id, r.matched_id, r.instance_hrid, r.state, m.data FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
+	var q = "SELECT r.id, r.matched_id, r.instance_hrid, r.state, m." + srsMarcAttr + " FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
 	var rows *sql.Rows
 	var err error
 	if rows, err = txin.QueryContext(context.TODO(), q); err != nil {

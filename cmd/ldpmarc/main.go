@@ -25,10 +25,11 @@ var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
+var srsRecords = flag.String("r", "public.srs_records", "Name of table containing SRS records to read")
+var srsMarc = flag.String("m", "public.srs_marc", "Name of table containing SRS MARC (JSON) data to read")
+var srsMarcAttr = flag.String("j", "data", "Name of column containing MARC JSON data")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
-var srsRecords = "public.srs_records"
-var srsMarc = "public.srs_marc"
 var tableoutSchema = "public"
 var tableoutTable = "_srs_marctab"
 var tableout = tableoutSchema + "." + tableoutTable
@@ -93,7 +94,7 @@ func run() error {
 	}
 	if *incUpdateFlag && incUpdateAvail /* && !*fullUpdateFlag */ && *csvFilenameFlag == "" {
 		printerr("incremental update (experimental)")
-		if err = inc.IncUpdate(db, srsRecords, srsMarc, tablefinal, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(db, *srsRecords, *srsMarc, *srsMarcAttr, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -154,7 +155,7 @@ func fullUpdate(db *sql.DB) error {
 		}
 		printerr("new table is ready to use: " + tablefinal)
 		printerr("writing checksums")
-		if err = inc.CreateCksum(db, srsRecords, srsMarc); err != nil {
+		if err = inc.CreateCksum(db, *srsRecords, *srsMarc, *srsMarcAttr); err != nil {
 			return err
 		}
 		printerr("vacuuming")
@@ -183,12 +184,12 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	} // Deferred txin.Rollback() causes process to hang
 	// read number of input records
 	var inputCount int64
-	if inputCount, err = selectCount(txin, srsRecords); err != nil {
+	if inputCount, err = selectCount(txin, *srsRecords); err != nil {
 		return err
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
-	var rch <-chan reader.Record = reader.ReadAll(txin, srsRecords, srsMarc, *verboseFlag)
+	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecords, *srsMarc, *srsMarcAttr, *verboseFlag)
 	var writeCount int64
 	if writeCount, err = processAll(txout, rch); err != nil {
 		return err
@@ -204,6 +205,10 @@ func process(db *sql.DB, txout *sql.Tx) error {
 func setupTable(txout *sql.Tx) error {
 	var err error
 	var q string
+	q = "CREATE SCHEMA IF NOT EXISTS dbsystem;"
+	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("creating schema: %s", err)
+	}
 	if tableoutSchema != "public" {
 		q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
 		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
