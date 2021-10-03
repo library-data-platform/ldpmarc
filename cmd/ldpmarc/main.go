@@ -25,9 +25,9 @@ var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
-var srsRecords = flag.String("r", "public.srs_records", "Name of table containing SRS records to read")
-var srsMarc = flag.String("m", "public.srs_marc", "Name of table containing SRS MARC (JSON) data to read")
-var srsMarcAttr = flag.String("j", "data", "Name of column containing MARC JSON data")
+var srsRecordsFlag = flag.String("r", "public.srs_records", "Name of table containing SRS records to read")
+var srsMarcFlag = flag.String("m", "public.srs_marc", "Name of table containing SRS MARC (JSON) data to read")
+var srsMarcAttrFlag = flag.String("j", "data", "Name of column containing MARC JSON data")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
 var tableoutSchema = "public"
@@ -46,7 +46,7 @@ func main() {
 		printerr("invalid argument: %s", flag.Arg(0))
 		os.Exit(2)
 	}
-	if *helpFlag || *datadirFlag == "" || (*ldpUserFlag == "" && *csvFilenameFlag == "") {
+	if *helpFlag || *datadirFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", program)
 		flag.PrintDefaults()
 		if *helpFlag {
@@ -94,7 +94,7 @@ func run() error {
 	}
 	if *incUpdateFlag && incUpdateAvail /* && !*fullUpdateFlag */ && *csvFilenameFlag == "" {
 		printerr("incremental update (experimental)")
-		if err = inc.IncUpdate(db, *srsRecords, *srsMarc, *srsMarcAttr, tablefinal, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -146,8 +146,10 @@ func fullUpdate(db *sql.DB) error {
 			return err
 		}
 		// Grant permission to LDP user
-		if err = grant(txout, *ldpUserFlag); err != nil {
-			return err
+		if ldpUserFlag != nil && *ldpUserFlag != "" {
+			if err = grant(txout, *ldpUserFlag); err != nil {
+				return err
+			}
 		}
 		// Commit
 		if err = txout.Commit(); err != nil {
@@ -155,7 +157,7 @@ func fullUpdate(db *sql.DB) error {
 		}
 		printerr("new table is ready to use: " + tablefinal)
 		printerr("writing checksums")
-		if err = inc.CreateCksum(db, *srsRecords, *srsMarc, *srsMarcAttr); err != nil {
+		if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag); err != nil {
 			return err
 		}
 		printerr("vacuuming")
@@ -184,12 +186,12 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	} // Deferred txin.Rollback() causes process to hang
 	// read number of input records
 	var inputCount int64
-	if inputCount, err = selectCount(txin, *srsRecords); err != nil {
+	if inputCount, err = selectCount(txin, *srsRecordsFlag); err != nil {
 		return err
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
-	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecords, *srsMarc, *srsMarcAttr, *verboseFlag)
+	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, *verboseFlag)
 	var writeCount int64
 	if writeCount, err = processAll(txout, rch); err != nil {
 		return err
