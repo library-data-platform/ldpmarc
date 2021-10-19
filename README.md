@@ -19,6 +19,7 @@ System requirements
   * required module: pg_trgm
 * [Go](https://golang.org/) 1.16 or later
 * [LDP](https://github.com/library-data-platform/ldp) 1.3 or later
+* Optional: [Docker](https://docker.com) 17.05 or later
 
 The pg_trgm module is enabled in the database by a superuser:
 
@@ -54,6 +55,16 @@ The `build.sh` script creates a `bin/` subdirectory and builds the
 $ ./bin/ldpmarc -h
 ```
 
+Building the software with Docker
+---------------------------------
+
+```bash
+$ git clone https://github.com/library-data-platform/ldpmarc
+$ cd ldpmarc
+$ docker build -t ldpmarc:[VERSION] . 
+```
+
+
 
 Running ldpmarc
 ---------------
@@ -73,6 +84,17 @@ For example:
 ```bash
 $ ldpmarc -D ldp_data -u ldp
 ```
+
+Running ldpmarc as a Docker container
+-------------------------------------
+
+Same as above but omit the '-D' option and, instead, mount your local LDP 
+data directory to /var/lib/ldp in the container:
+
+```bash
+$ docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp_user>
+```
+
 
 SRS MARC data are read from the database tables `public.srs_marc` and
 `public.srs_records`, and transformed into tabular data.  Only records
