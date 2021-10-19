@@ -8,6 +8,6 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build ldpmarc
       run: docker build -t ldpmarc:${GITHUB_SHA}-${GITHUB_RUN_NUMBER} --file Dockerfile . 
-    - name: Run LDP
+    - name: Run ldpmarc
       run: docker run --rm ldpmarc:${GITHUB_SHA}-${GITHUB_RUN_NUMBER} -h 
       
