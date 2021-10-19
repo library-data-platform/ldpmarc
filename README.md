@@ -55,6 +55,7 @@ The `build.sh` script creates a `bin/` subdirectory and builds the
 $ ./bin/ldpmarc -h
 ```
 
+
 Building the software with Docker
 ---------------------------------
 
@@ -63,7 +64,6 @@ $ git clone https://github.com/library-data-platform/ldpmarc
 $ cd ldpmarc
 $ docker build -t ldpmarc:[VERSION] . 
 ```
-
 
 
 Running ldpmarc
@@ -85,16 +85,13 @@ For example:
 $ ldpmarc -D ldp_data -u ldp
 ```
 
-Running ldpmarc as a Docker container
--------------------------------------
-
-Same as above but omit the '-D' option and, instead, mount your local LDP 
-data directory to /var/lib/ldp in the container:
+To run ldpmarc as a Docker container, omit the `-D` option and instead
+mount your local LDP data directory at `/var/lib/ldp` in the
+container:
 
 ```bash
 $ docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp_user>
 ```
-
 
 SRS MARC data are read from the database tables `public.srs_marc` and
 `public.srs_records`, and transformed into tabular data.  Only records
