@@ -1,0 +1,13 @@
+name: ldpmarc Build Workflow
+on: [push, pull_request]
+
+jobs:
+  build-ldpmarc:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build ldpmarc
+      run: docker build -t ldpmarc:${GITHUB_SHA}-${GITHUB_RUN_NUMBER} --file Dockerfile . 
+    - name: Run ldpmarc
+      run: docker run --rm ldpmarc:${GITHUB_SHA}-${GITHUB_RUN_NUMBER} -h 
+      
