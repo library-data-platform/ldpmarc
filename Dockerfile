@@ -1,8 +1,5 @@
 FROM golang:1.17-bullseye AS builder
 
-RUN apt update && apt install -y cmake libcurl4-openssl-dev postgresql-server-dev-all \
-    libpq-dev rapidjson-dev unixodbc unixodbc-dev libsqlite3-dev
-
 WORKDIR /usr/src/ldpmarc
 COPY . /usr/src/ldpmarc
 
