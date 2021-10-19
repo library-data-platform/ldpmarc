@@ -1,4 +1,4 @@
-name: LDP Release Workflow
+name: ldpmarc Release Workflow
 on:
   push:
     tags:
