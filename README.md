@@ -14,12 +14,17 @@ tabular format.__
 System requirements
 -------------------
 
-* Linux
-* [PostgreSQL](https://www.postgresql.org/) 12.6 or later
-  * required module: pg_trgm
-* [Go](https://golang.org/) 1.16 or later
-* [LDP](https://github.com/library-data-platform/ldp) 1.3 or later
-* Optional: [Docker](https://docker.com) 17.05 or later
+* Operating systems supported:
+  * Linux
+* Database systems supported:
+  * [PostgreSQL](https://www.postgresql.org/) 12.6 or later
+    * required module: pg_trgm
+* LDP compatibility:
+  * [LDP](https://github.com/library-data-platform/ldp) 1.3 or later
+* Required to build from source code:
+  * [Go](https://golang.org/) 1.17 or later
+* Required to build and run via Docker:
+  * [Docker](https://docker.com) 17.05 or later
 
 The pg_trgm module is enabled in the database by a superuser:
 
@@ -55,9 +60,7 @@ The `build.sh` script creates a `bin/` subdirectory and builds the
 $ ./bin/ldpmarc -h
 ```
 
-
-Building the software with Docker
----------------------------------
+To build ldpmarc with Docker:
 
 ```bash
 $ git clone https://github.com/library-data-platform/ldpmarc
@@ -117,4 +120,20 @@ with `-i` ldpmarc will still perform a full update when required, such
 as the first time that ldpmarc 1.2 is run, or when schema changes need
 to be made.
 
+
+Resources
+---------
+
+* Report bugs at
+  [Issues](https://github.com/library-data-platform/ldpmarc/issues)
+
+* Ask questions at
+  [Discussions](https://github.com/library-data-platform/ldpmarc/discussions)
+
+* For notification of new releases, on the [ldpmarc page in
+  GitHub](https://github.com/library-data-platform/ldpmarc) select
+  Watch > Custom > Releases.
+
+* Notes on [using ldpmarc with
+  LDLite](https://github.com/library-data-platform/ldlite/blob/main/srs.md)
 
