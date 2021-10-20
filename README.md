@@ -108,17 +108,21 @@ in the database.  In some libraries the output table may contain more
 than 500 million rows and ldpmarc could use 200 GB of disk space or
 more during the data loading process.
 
-The default process is a "full update" which means that the entire
-`srs_marctab` table and all of its indexes are rebuilt.  In ldpmarc
-1.2, experimental support for "incremental update" is available.
-Incremental update may run much faster than full update if the number
-of changes is small.  (If many records have changed, incremental
-update may take too much time; and in that case a full update should
-be run once before resuming incremental updates.)  To enable
-incremental update, use the `-i` command-line option.  Note that even
-with `-i` ldpmarc will still perform a full update when required, such
-as the first time that ldpmarc 1.2 is run, or when schema changes need
-to be made.
+
+Full vs. incremental update
+---------------------------
+
+The first time ldpmarc runs, it will perform a "full update" of all of
+the SRS records.  In subsequent runs, it will attempt to use
+"incremental update" to update only records that have changed since
+the previous run, which can dramatically reduce the running time if
+the number of changes is small.
+
+However, if very many records have changed, it is possible that
+incremental update may take longer than full update.  In that case a
+full update should be run once before resuming incremental updates.
+This can be done by using the `-f` command-line option, which disables
+incremental update and requires ldpmarc to do a full update.
 
 
 Resources

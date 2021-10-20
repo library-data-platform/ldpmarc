@@ -18,8 +18,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-//var fullUpdateFlag = flag.Bool("f", false, "Force full update, even if incremental update is available")
-var incUpdateFlag = flag.Bool("i", false, "Use incremental update if possible (experimental)")
+var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremental update is available")
+var incUpdateFlag = flag.Bool("i", true, "Incremental update [deprecated]")
 var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
@@ -92,8 +92,8 @@ func run() error {
 	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
 		return err
 	}
-	if *incUpdateFlag && incUpdateAvail /* && !*fullUpdateFlag */ && *csvFilenameFlag == "" {
-		printerr("incremental update (experimental)")
+	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
+		printerr("incremental update")
 		if err = inc.IncUpdate(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
