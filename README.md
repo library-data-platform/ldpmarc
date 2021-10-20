@@ -132,11 +132,9 @@ All ldpmarc data can be deleted from the database by dropping three
 tables:
 
 ```sql
-DROP TABLE public.srs_marctab;
-
-DROP TABLE dbsystem.ldpmarc_cksum;
-
-DROP TABLE dbsystem.ldpmarc_metadata;
+DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;
+DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;
+DROP TABLE IF EXISTS public.srs_marctab;
 ```
 
 This may be useful for uninstalling ldpmarc, or to restart it with a
