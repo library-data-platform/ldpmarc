@@ -47,7 +47,7 @@ func main() {
 		os.Exit(2)
 	}
 	if *helpFlag || *datadirFlag == "" {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", program)
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", program)
 		flag.PrintDefaults()
 		if *helpFlag {
 			return
@@ -92,6 +92,7 @@ func run() error {
 	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
 		return err
 	}
+	_ = incUpdateFlag
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("incremental update")
 		if err = inc.IncUpdate(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
@@ -124,12 +125,16 @@ func fullUpdate(db *sql.DB) error {
 		if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 			return err
 		}
-		defer txout.Rollback()
+		defer func(txout *sql.Tx) {
+			_ = txout.Rollback()
+		}(txout)
 	} else {
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
 			return err
 		}
-		defer csvFile.Close()
+		defer func(csvFile *os.File) {
+			_ = csvFile.Close()
+		}(csvFile)
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
@@ -191,7 +196,7 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
-	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, *verboseFlag)
+	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag)
 	var writeCount int64
 	if writeCount, err = processAll(txout, rch); err != nil {
 		return err
@@ -211,11 +216,9 @@ func setupTable(txout *sql.Tx) error {
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
-	if tableoutSchema != "public" {
-		q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-			return fmt.Errorf("creating schema: %s", err)
-		}
+	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
+	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("creating schema: %s", err)
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
@@ -299,7 +302,7 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 					Content:      m.Content,
 				}
 			} else {
-				fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+				_, _ = fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 			}
 			writeCount++
 		}
@@ -396,5 +399,5 @@ func grant(txout *sql.Tx, user string) error {
 }
 
 func printerr(format string, v ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%s: %s\n", program, fmt.Sprintf(format, v...))
+	_, _ = fmt.Fprintf(os.Stderr, "%s: %s\n", program, fmt.Sprintf(format, v...))
 }

@@ -51,7 +51,9 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarcAttr string) error {
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
 	// cksum
 	var q = "DROP TABLE IF EXISTS " + cksumTable + ";"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
@@ -99,13 +101,15 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer txout.Rollback()
+	defer func(txout *sql.Tx) {
+		_ = txout.Rollback()
+	}(txout)
 	// add new data
 	if err = updateNew(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, txout, printerr, verbose); err != nil {
 		return err
 	}
 	// remove deleted data
-	if err = updateDelete(db, srsRecords, srsMarc, tablefinal, txout, printerr, verbose); err != nil {
+	if err = updateDelete(srsRecords, tablefinal, txout, printerr, verbose); err != nil {
 		return err
 	}
 	// replace modified data
@@ -143,14 +147,18 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
 	// transform
 	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_add")
 	var rows *sql.Rows
 	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to add: %s", err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 	for rows.Next() {
 		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
 		var cksum string
@@ -193,7 +201,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	return nil
 }
 
-func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
+func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
 	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id = c.id WHERE r.id IS NULL;"
@@ -221,7 +229,7 @@ func updateDelete(db *sql.DB, srsRecords, srsMarc, tablefinal string, txout *sql
 		if err = rows.Err(); err != nil {
 			return fmt.Errorf("reading deletion rows: %s", err)
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	// delete in finaltable
 	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc_delete);"
@@ -252,14 +260,18 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
 	// transform
 	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_change")
 	var rows *sql.Rows
 	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to change: %s", err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 	for rows.Next() {
 		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
 		var cksum string

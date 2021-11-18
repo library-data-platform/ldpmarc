@@ -15,7 +15,7 @@ type Record struct {
 	Data         sql.NullString
 }
 
-func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, srsMarcAttr string, verbose bool) <-chan Record {
+func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, srsMarcAttr string) <-chan Record {
 	var ch = make(chan Record, 1000)
 	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + " FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
 	var rows *sql.Rows
@@ -36,7 +36,7 @@ func scanAll(rows *sql.Rows, ch chan Record) {
 				ch <- Record{Stop: true, Err: err}
 				return
 			}
-			rows.Close()
+			_ = rows.Close()
 			ch <- Record{Stop: true, Err: nil}
 			return
 		}

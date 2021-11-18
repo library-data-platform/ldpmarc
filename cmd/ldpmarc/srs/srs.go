@@ -16,7 +16,7 @@ type Marc struct {
 }
 
 func Transform(data string, state string) ([]Marc, string, error) {
-	var mrecs = []Marc{}
+	mrecs := make([]Marc, 0)
 	var err error
 	var i interface{}
 	if err = json.Unmarshal([]byte(data), &i); err != nil {
@@ -141,7 +141,7 @@ func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm 
 				SF:      k,
 				Content: vs,
 			})
-			(*line)++
+			*line++
 		}
 	}
 
