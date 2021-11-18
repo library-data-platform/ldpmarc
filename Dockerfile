@@ -7,7 +7,7 @@ RUN chmod +x ./build.sh && ./build.sh
 
 FROM debian:bullseye-slim
 
-LABEL org.opencontainers.image.source https://github.com/library-data-platform/ldpmarc
+LABEL org.opencontainers.image.source="https://github.com/library-data-platform/ldpmarc"
 ENV DATADIR=/var/lib/ldp
 
 COPY --from=builder /usr/src/ldpmarc/bin/ldpmarc /usr/local/bin/ldpmarc
