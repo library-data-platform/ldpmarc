@@ -22,7 +22,6 @@ var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremen
 var incUpdateFlag = flag.Bool("i", true, "Incremental update [deprecated]")
 var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
-var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var srsRecordsFlag = flag.String("r", "public.srs_records", "Name of table containing SRS records to read")
@@ -349,12 +348,10 @@ func indexColumns(txout *sql.Tx, cols []string) error {
 	var c string
 	for _, c = range cols {
 		if c == "content" {
-			if !*noTrigramIndexFlag {
-				printerr("creating index: %s", c)
-				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
-				if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
-				}
+			printerr("creating index: %s", c)
+			var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
+			if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+				return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 			}
 		} else {
 			printerr("creating index: %s", c)
