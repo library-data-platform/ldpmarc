@@ -314,7 +314,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 
 func filterQuery(srsRecords, srsMarc, srsMarcAttr, filter string) string {
 	return "" +
-		"SELECT r.id, r.matched_id, r.instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
+		"SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
 		"    FROM " + srsRecords + " r " +
 		"        JOIN " + filter + " f ON r.id = f.id " +
 		"        JOIN " + srsMarc + " m ON r.id = m.id;"
