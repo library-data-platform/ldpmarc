@@ -26,15 +26,32 @@ System requirements
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
 
-The pg_trgm module is enabled in the database by a superuser:
+
+Enabling the pg_trgm module
+---------------------------
+
+The pg_trgm module should be enabled in the database by a superuser
+(typically the `postgres` user):
 
 ```sql
 CREATE EXTENSION pg_trgm;
 ```
 
+If ldpmarc is not able to use the extension, it will generate this
+error:
 
-Building the software
----------------------
+```
+ERROR:  operator class "gin_trgm_ops" does not exist for access method "gin"
+```
+
+If this error appears even after the module has been enabled using
+`CREATE EXTENSION`, it may be necessary to use the `GRANT` command to
+grant permission for the extension to the LDP database administrator
+(defined as `database_user`, in `ldpconf.json` under `ldp_database`).
+
+
+Building ldpmarc
+----------------
 
 Set the `GOPATH` environment variable to specify a path that can serve 
 as the build workspace for Go, e.g.:
