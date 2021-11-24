@@ -49,6 +49,15 @@ If this error appears even after the module has been enabled using
 grant permission for the extension to the LDP database administrator
 (defined as `database_user`, in `ldpconf.json` under `ldp_database`).
 
+When the extension is working properly, it should be possible to log
+in as the LDP database administrator and create a GIN index, e.g.:
+
+```sql
+CREATE TEMP TABLE t (s varchar);
+
+CREATE INDEX ON t USING GIN (s gin_trgm_ops);
+```
+
 
 Building ldpmarc
 ----------------
