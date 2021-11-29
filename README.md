@@ -119,10 +119,12 @@ the previous run, which can dramatically reduce the running time if
 the number of changes is small.
 
 However, if very many records have changed, it is possible that
-incremental update may take longer than full update.  In that case a
-full update should be run once before resuming incremental updates.
-This can be done by using the `-f` command-line option, which disables
-incremental update and requires ldpmarc to do a full update.
+incremental update may take longer than full update.  If it appears
+that an incremental update will never finish, it should be canceled,
+and a full update should be run once before resuming incremental
+updates.  This can be done by using the `-f` command-line option,
+which disables incremental update and requires ldpmarc to do a full
+update.
 
 
 Resetting ldpmarc
