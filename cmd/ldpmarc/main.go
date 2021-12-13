@@ -198,8 +198,10 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	// main processing
 	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag)
 	var writeCount int64
-	if writeCount, err = processAll(txout, rch); err != nil {
-		return err
+	if inputCount > 0 {
+		if writeCount, err = processAll(txout, rch); err != nil {
+			return err
+		}
 	}
 	// Commit
 	if err = txin.Rollback(); err != nil {
