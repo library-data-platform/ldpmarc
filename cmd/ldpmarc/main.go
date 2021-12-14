@@ -138,7 +138,8 @@ func fullUpdate(db *sql.DB) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	if err = process(db, txout); err != nil {
+	inputCount, err := process(db, txout)
+	if err != nil {
 		return err
 	}
 	if *csvFilenameFlag == "" {
@@ -161,9 +162,11 @@ func fullUpdate(db *sql.DB) error {
 			return err
 		}
 		printerr("new table is ready to use: " + tablefinal)
-		printerr("writing checksums")
-		if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag); err != nil {
-			return err
+		if inputCount > 0 {
+			printerr("writing checksums")
+			if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag); err != nil {
+				return err
+			}
 		}
 		printerr("vacuuming")
 		if err = util.VacuumAnalyze(db, tablefinal); err != nil {
@@ -176,23 +179,23 @@ func fullUpdate(db *sql.DB) error {
 	return nil
 }
 
-func process(db *sql.DB, txout *sql.Tx) error {
+func process(db *sql.DB, txout *sql.Tx) (int64, error) {
 	var err error
 	if txout != nil {
 		if err = setupTable(txout); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	// Begin reader transaction
 	var txin *sql.Tx
 	if txin, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
-		return err
+		return 0, err
 	} // Deferred txin.Rollback() causes process to hang
 	// read number of input records
 	var inputCount int64
 	if inputCount, err = selectCount(txin, *srsRecordsFlag); err != nil {
-		return err
+		return 0, err
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
@@ -200,15 +203,15 @@ func process(db *sql.DB, txout *sql.Tx) error {
 	var writeCount int64
 	if inputCount > 0 {
 		if writeCount, err = processAll(txout, rch); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	// Commit
 	if err = txin.Rollback(); err != nil {
-		return err
+		return 0, err
 	}
 	printerr("%d output rows", writeCount)
-	return nil
+	return inputCount, nil
 }
 
 func setupTable(txout *sql.Tx) error {
