@@ -32,6 +32,12 @@ The pg_trgm module is enabled in the database by a superuser:
 CREATE EXTENSION pg_trgm;
 ```
 
+Then grant the LDP administrator permission to use the extension,
+e.g.:
+```sql
+GRANT USAGE ON SCHEMA public TO ldpadmin;
+```
+
 If the pg_trgm extension is not enabled, the `-T` option must be used
 with ldpmarc to disable trigram indexes, and this will impact query
 performance.
