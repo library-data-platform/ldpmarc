@@ -1,3 +1,5 @@
+// Package srs transforms FOLIO SRS MARC records in JSON format into a tabular
+// form.
 package srs
 
 import (
@@ -5,6 +7,7 @@ import (
 	"fmt"
 )
 
+// Marc is a single "row" of data extracted from part of a MARC record.
 type Marc struct {
 	Line    int64
 	Field   string
@@ -15,11 +18,22 @@ type Marc struct {
 	Content string
 }
 
-func Transform(data string, state string) ([]Marc, string, error) {
+// Transform converts marcjson, an SRS MARC record in JSON format, into a
+// table.  Only a MARC record considered to be current is transformed, where
+// current is defined as having state = "ACTUAL" and some content present in
+// 999$i which is presumed to be the FOLIO instance identifer.  Transform
+// returns the resultant table as a slice of Marc structs and the instance
+// identifer as a string.  If the MARC record is not current, Transform returns
+// an empty slice and the instance identifier as "".
+func Transform(marcjson string, state string) ([]Marc, string, error) {
+	// mrecs is the slice of Marc structs that will contain the transformed
+	// rows.
 	mrecs := make([]Marc, 0)
+	// Convert the JSON object into a map[string]interface{} which will be
+	// used to extract all of the required data from the MARC record.
 	var err error
 	var i interface{}
-	if err = json.Unmarshal([]byte(data), &i); err != nil {
+	if err = json.Unmarshal([]byte(marcjson), &i); err != nil {
 		return nil, "", err
 	}
 	var ok bool
@@ -27,12 +41,12 @@ func Transform(data string, state string) ([]Marc, string, error) {
 	if m, ok = i.(map[string]interface{}); !ok {
 		return nil, "", fmt.Errorf("parsing error")
 	}
-	// Parse leader
+	// Extract the leader.
 	var leader string
-	if leader, err = parseLeader(m); err != nil {
+	if leader, err = getLeader(m); err != nil {
 		return nil, "", fmt.Errorf("parsing: %s", err)
 	}
-	// Fields
+	// Extract the "fields" array.
 	if i, ok = m["fields"]; !ok {
 		return nil, "", fmt.Errorf("parsing: \"fields\" not found")
 	}
@@ -40,6 +54,8 @@ func Transform(data string, state string) ([]Marc, string, error) {
 	if a, ok = i.([]interface{}); !ok {
 		return nil, "", fmt.Errorf("parsing: \"fields\" is not an array")
 	}
+	// Each element of the fields array is an object (map) with a MARC tag
+	// and possibly subfields.
 	var line int64 = 1
 	var fieldCounts = make(map[string]int64)
 	for _, i = range a {
@@ -53,8 +69,10 @@ func Transform(data string, state string) ([]Marc, string, error) {
 			fieldCounts[t] = fieldC
 			switch v := ii.(type) {
 			case string:
+				// We convert a string field to a single row of output.
 				if t == "001" {
-					// Leader (000)
+					// When we encounter 001, we first output the
+					// leader as 000.
 					mrecs = append(mrecs, Marc{
 						Line:    line,
 						Field:   "000",
@@ -66,6 +84,7 @@ func Transform(data string, state string) ([]Marc, string, error) {
 					})
 					line++
 				}
+				// Now write the row.
 				mrecs = append(mrecs, Marc{
 					Line:    line,
 					Field:   t,
@@ -77,6 +96,9 @@ func Transform(data string, state string) ([]Marc, string, error) {
 				})
 				line++
 			case map[string]interface{}:
+				// An object (map) needs further processing.
+				// We call transformSubfields which will output
+				// one or more rows to mrecs.
 				if err = transformSubfields(&mrecs, &line, t, fieldC, v); err != nil {
 					return nil, "", fmt.Errorf("parsing: %s", err)
 				}
@@ -86,7 +108,9 @@ func Transform(data string, state string) ([]Marc, string, error) {
 
 		}
 	}
+	// Extract the instance identifier from 999i.
 	var instanceID string = getInstanceID(mrecs)
+	// If the MARC record is not current, return nothing.
 	if !isCurrent(state, instanceID) {
 		return []Marc{}, "", nil
 	}
@@ -148,7 +172,7 @@ func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm 
 	return nil
 }
 
-func parseLeader(m map[string]interface{}) (string, error) {
+func getLeader(m map[string]interface{}) (string, error) {
 	var i interface{}
 	var ok bool
 	if i, ok = m["leader"]; !ok {
