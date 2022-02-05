@@ -14,14 +14,14 @@ tabular format.__
 System requirements
 -------------------
 
-* Operating systems supported:
-  * Linux
-* Database systems supported:
-  * [PostgreSQL](https://www.postgresql.org/) 12.6 or later
-    * required module: pg_trgm
-* LDP compatibility:
-  * [LDP](https://github.com/library-data-platform/ldp) 1.3 or later
-* Required to build from source code:
+* Linux
+* [PostgreSQL](https://www.postgresql.org/) 13.4 or later
+* [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
+* One of the following SRS data sources:
+  * [LDP](https://github.com/library-data-platform/ldp) 1.4.2 or later
+  * [LDLite](https://github.com/library-data-platform/ldlite)
+  * [Metadb](https://github.com/metadb-project/metadb) with [migration tables](https://github.com/folio-org/folio-analytics/tree/main/sql_migration)
+* Required to build from source:
   * [Go](https://golang.org/) 1.17 or later
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
