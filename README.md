@@ -26,7 +26,13 @@ System requirements
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
 
-The pg_trgm module is enabled in the database by a superuser:
+
+Enabling pg_trgm
+----------------
+
+The pg_trgm module is used to support the SQL `LIKE` and `ILIKE`
+pattern matching operators on MARC content data.  The module is
+enabled in the database by a superuser:
 
 ```sql
 CREATE EXTENSION pg_trgm;
@@ -38,13 +44,25 @@ e.g.:
 GRANT USAGE ON SCHEMA public TO ldpadmin;
 ```
 
-If the pg_trgm extension is not enabled, the `-T` option must be used
-with ldpmarc to disable trigram indexes, and this will impact query
-performance.
+To test if the extension is working, log in as the ldpadmin user and
+run:
+
+```sql
+CREATE TEMP TABLE t (v varchar(1));
+
+CREATE INDEX ON t USING GIN (v gin_trgm_ops);
+```
+
+If this shows any errors, then the extension may not be enabled.
+
+If the pg_trgm extension is not enabled, the `-T` option must be
+included for ldpmarc to disable trigram indexes, but this will
+significantly impact query performance when using the `LIKE` or
+`ILIKE` operator with the `content` column.
 
 
-Building the software
----------------------
+Building ldpmarc
+----------------
 
 Set the `GOPATH` environment variable to specify a path that can serve 
 as the build workspace for Go, e.g.:
