@@ -242,11 +242,11 @@ func setupTable(db *sql.DB) error {
 	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
-		"    srs_id varchar(36) NOT NULL," +
+		"    srs_id uuid NOT NULL," +
 		"    line smallint NOT NULL," +
-		"    matched_id varchar(36) NOT NULL," +
+		"    matched_id uuid NOT NULL," +
 		"    instance_hrid varchar(32) NOT NULL," +
-		"    instance_id varchar(36) NOT NULL," +
+		"    instance_id uuid NOT NULL," +
 		"    field varchar(3) NOT NULL," +
 		"    ind1 varchar(1) NOT NULL," +
 		"    ind2 varchar(1) NOT NULL," +
