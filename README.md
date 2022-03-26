@@ -21,16 +21,20 @@ System requirements
 ### Software
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 13.6 or later
+* [PostgreSQL](https://www.postgresql.org/) 14.2 or later
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
   * [LDP](https://github.com/library-data-platform/ldp) 1.6.0 or later
   * [LDLite](https://github.com/library-data-platform/ldlite)
   * [Metadb](https://github.com/metadb-project/metadb) with [migration tables](https://github.com/folio-org/folio-analytics/tree/main/sql_migration)
 * Required to build from source:
-  * [Go](https://golang.org/) 1.18 or later
+  * [Go](https://golang.org/) 1.17.8 or later
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
+
+### Other requirements
+
+The ldpmarc software currently supports MARC 21 data.
 
 
 Database configuration
