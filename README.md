@@ -1,7 +1,7 @@
 ldpmarc
 =======
 
-Copyright (C) 2021 The Open Library Foundation  
+Copyright (C) 2021-2022 The Open Library Foundation  
 
 This software is distributed under the terms of the Apache License, 
 Version 2.0.  See the file [LICENSE](LICENSE) for more information.
@@ -14,15 +14,21 @@ tabular format.__
 System requirements
 -------------------
 
+### Hardware
+
+* Database storage (estimated): 500 GB
+
+### Software
+
 * Linux
 * [PostgreSQL](https://www.postgresql.org/) 13.6 or later
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
-  * [LDP](https://github.com/library-data-platform/ldp) 1.4.2 or later
+  * [LDP](https://github.com/library-data-platform/ldp) 1.6.0 or later
   * [LDLite](https://github.com/library-data-platform/ldlite)
   * [Metadb](https://github.com/metadb-project/metadb) with [migration tables](https://github.com/folio-org/folio-analytics/tree/main/sql_migration)
 * Required to build from source:
-  * [Go](https://golang.org/) 1.17 or later
+  * [Go](https://golang.org/) 1.18 or later
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
 
@@ -43,20 +49,20 @@ The pg_trgm module is used to support the SQL `LIKE` and `ILIKE`
 pattern matching operators on MARC content data.  The module is
 enabled in the database by a superuser:
 
-```sql
+```
 CREATE EXTENSION pg_trgm;
 ```
 
 Then grant the LDP administrator permission to use the extension,
 e.g.:
-```sql
+```
 GRANT USAGE ON SCHEMA public TO ldpadmin;
 ```
 
 To test if the extension is working, log in as the ldpadmin user and
 run:
 
-```sql
+```
 CREATE TEMP TABLE t (v varchar(1));
 
 CREATE INDEX ON t USING GIN (v gin_trgm_ops);
@@ -76,29 +82,21 @@ Building ldpmarc
 Set the `GOPATH` environment variable to specify a path that can serve 
 as the build workspace for Go, e.g.:
 
-```bash
-$ export GOPATH=$HOME/go
+```
+export GOPATH=$HOME/go
 ```
 
 Then:
 
-```bash
-$ ./build.sh
+```
+./build.sh
 ```
 
 The `build.sh` script creates a `bin/` subdirectory and builds the
 `ldpmarc` executable there.  To see all command-line options:
 
-```bash
-$ ./bin/ldpmarc -h
 ```
-
-To build ldpmarc with Docker:
-
-```bash
-$ git clone https://github.com/library-data-platform/ldpmarc
-$ cd ldpmarc
-$ docker build -t ldpmarc:[VERSION] . 
+./bin/ldpmarc -h
 ```
 
 
@@ -107,7 +105,7 @@ Running ldpmarc
 
 The most common usage is:
 
-```bash
+```
 ldpmarc -D <datadir> -u <ldp_user>
 ```
 
@@ -117,16 +115,8 @@ output table.
 
 For example:
 
-```bash
-$ ldpmarc -D ldp_data -u ldp
 ```
-
-To run ldpmarc as a Docker container, omit the `-D` option and instead
-mount your local LDP data directory at `/var/lib/ldp` in the
-container:
-
-```bash
-$ docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp_user>
+ldpmarc -D ldp_data -u ldp
 ```
 
 SRS MARC data are read from the database tables `public.srs_marc` and
@@ -137,9 +127,7 @@ having state = `ACTUAL` and an identifier present in `999$i`.
 The transformed output is written to the table `public.srs_marctab`.
 
 This process can take a long time to run and uses a lot of disk space
-in the database.  In some libraries the output table may contain more
-than 500 million rows and ldpmarc could use 200 GB of disk space or
-more during the data loading process.
+in the database.
 
 
 Full vs. incremental update
@@ -166,12 +154,34 @@ Resetting ldpmarc
 All ldpmarc data can be deleted from the database by dropping three
 tables:
 
-```sql
+```
 DROP TABLE IF EXISTS ldpmarc._srs_marctab, ldpmarc.cksum, ldpmarc.metadata, public.srs_marctab;
 ```
 
 This may be useful for uninstalling ldpmarc, or to restart it with a
 blank slate.
+
+
+Running ldpmarc with Docker
+---------------------------
+
+To build ldpmarc with Docker:
+
+```
+git clone https://github.com/library-data-platform/ldpmarc
+
+cd ldpmarc
+
+docker build -t ldpmarc:[VERSION] . 
+```
+
+To run ldpmarc as a Docker container, omit the `-D` option and instead
+mount your local LDP data directory at `/var/lib/ldp` in the
+container:
+
+```
+docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp_user>
+```
 
 
 Resources
