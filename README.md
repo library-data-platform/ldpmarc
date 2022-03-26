@@ -155,7 +155,7 @@ update.
 Resetting ldpmarc
 -----------------
 
-All ldpmarc data can be deleted from the database by dropping three
+All ldpmarc data can be deleted from the database by dropping these
 tables:
 
 ```
