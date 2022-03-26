@@ -236,6 +236,10 @@ func setupTable(db *sql.DB) error {
 		return fmt.Errorf("creating schema: %s", err)
 	}
 	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+	var lz4 string
+	if util.IsLZ4Available(db) {
+		lz4 = " COMPRESSION lz4"
+	}
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
 		"    srs_id varchar(36) NOT NULL," +
@@ -248,8 +252,7 @@ func setupTable(db *sql.DB) error {
 		"    ind2 varchar(1) NOT NULL," +
 		"    ord smallint NOT NULL," +
 		"    sf varchar(1) NOT NULL," +
-		"    content varchar(65535) NOT NULL" +
-		// "    content varchar(65535) COMPRESSION lz4 NOT NULL" +
+		"    content varchar(65535)" + lz4 + " NOT NULL" +
 		") PARTITION BY LIST (field);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)

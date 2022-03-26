@@ -94,3 +94,11 @@ func GetAllFieldNames() []string {
 	}
 	return s
 }
+
+func IsLZ4Available(db *sql.DB) bool {
+	if _, err := db.ExecContext(context.TODO(), "CREATE TEMP TABLE lz4test (v varchar(1) COMPRESSION lz4)"); err != nil {
+		return false
+	}
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE lz4test")
+	return true
+}
