@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	_ "github.com/lib/pq"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
@@ -30,14 +32,12 @@ var srsMarcFlag = flag.String("m", "public.srs_marc", "Name of table containing 
 var srsMarcAttrFlag = flag.String("j", "data", "Name of column containing MARC JSON data")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
-var tableoutSchema = "public"
-var ptableoutSchema = "ldpmarc"
+var tableoutSchema = "ldpmarc"
 var tableoutTable = "_srs_marctab"
 var tableout = tableoutSchema + "." + tableoutTable
-var ptableout = ptableoutSchema + "." + tableoutTable
+var tablefinalSchema = "public"
 var tablefinalTable = "srs_marctab"
-var tablefinal = tableoutSchema + "." + tablefinalTable
-var ptablefinal = ptableoutSchema + "." + tablefinalTable
+var tablefinal = tablefinalSchema + "." + tablefinalTable
 
 var allFields = util.GetAllFieldNames()
 
@@ -105,7 +105,23 @@ func run() error {
 		}
 	} else {
 		printerr("full update")
+		// Catch SIGTERM etc.
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			for _ = range c {
+				_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
+				_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
+				_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+				for _, field := range allFields {
+					_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+				}
+				os.Exit(1)
+			}
+		}()
+		// Run full update
 		if err = fullUpdate(db); err != nil {
+			_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
 			return err
 		}
 	}
@@ -124,16 +140,7 @@ func openDB(host, port, user, password, dbname, sslmode string) (*sql.DB, error)
 
 func fullUpdate(db *sql.DB) error {
 	var err error
-	// Begin output transaction
-	var txout *sql.Tx
-	if *csvFilenameFlag == "" {
-		if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
-			return err
-		}
-		defer func(txout *sql.Tx) {
-			_ = txout.Rollback()
-		}(txout)
-	} else {
+	if *csvFilenameFlag != "" {
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
 			return err
 		}
@@ -143,30 +150,25 @@ func fullUpdate(db *sql.DB) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	inputCount, err := process(db, txout)
+	inputCount, err := process(db)
 	if err != nil {
 		return err
 	}
 	if *csvFilenameFlag == "" {
 		// Index columns
-		if err = index(txout); err != nil {
+		if err = index(db); err != nil {
 			return err
 		}
 		// Replace table
-		if err = replace(txout); err != nil {
+		if err = replace(db); err != nil {
 			return err
 		}
 		// Grant permission to LDP user
 		if ldpUserFlag != nil && *ldpUserFlag != "" {
-			if err = grant(txout, *ldpUserFlag); err != nil {
+			if err = grant(db, *ldpUserFlag); err != nil {
 				return err
 			}
 		}
-		// Commit
-		if err = txout.Commit(); err != nil {
-			return err
-		}
-		printerr("new table is ready to use: " + tablefinal)
 		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
 		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
@@ -182,14 +184,15 @@ func fullUpdate(db *sql.DB) error {
 		if err = inc.VacuumCksum(db); err != nil {
 			return err
 		}
+		printerr("new table is ready to use: " + tablefinal)
 	}
 	return nil
 }
 
-func process(db *sql.DB, txout *sql.Tx) (int64, error) {
+func process(db *sql.DB) (int64, error) {
 	var err error
-	if txout != nil {
-		if err = setupTable(txout); err != nil {
+	if db != nil {
+		if err = setupTable(db); err != nil {
 			return 0, err
 		}
 	}
@@ -209,7 +212,7 @@ func process(db *sql.DB, txout *sql.Tx) (int64, error) {
 	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag)
 	var writeCount int64
 	if inputCount > 0 {
-		if writeCount, err = processAll(txout, rch); err != nil {
+		if writeCount, err = processAll(db, rch); err != nil {
 			return 0, err
 		}
 	}
@@ -221,17 +224,18 @@ func process(db *sql.DB, txout *sql.Tx) (int64, error) {
 	return inputCount, nil
 }
 
-func setupTable(txout *sql.Tx) error {
+func setupTable(db *sql.DB) error {
 	var err error
 	var q string
 	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
-	q = "CREATE SCHEMA IF NOT EXISTS " + ptableoutSchema + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
 	q = "" +
 		"CREATE TABLE " + tableout + " (" +
 		"    srs_id varchar(36) NOT NULL," +
@@ -245,15 +249,16 @@ func setupTable(txout *sql.Tx) error {
 		"    ord smallint NOT NULL," +
 		"    sf varchar(1) NOT NULL," +
 		"    content varchar(65535) NOT NULL" +
-		// "    content varchar(65535) NOT NULL COMPRESSION lz4" +
+		// "    content varchar(65535) COMPRESSION lz4 NOT NULL" +
 		") PARTITION BY LIST (field);"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)
 	}
 	for _, field := range allFields {
-		q = "CREATE TABLE " + ptableout + "_" + field +
+		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+		q = "CREATE TABLE " + tableout + "_" + field +
 			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "');"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
 	}
@@ -270,9 +275,14 @@ func selectCount(txin *sql.Tx, tablein string) (int64, error) {
 	return count, nil
 }
 
-func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
-	var writeCount int64
+func processAll(db *sql.DB, rch <-chan reader.Record) (int64, error) {
 	var err error
+	// Begin output transaction
+	var txout *sql.Tx
+	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
+		return 0, err
+	}
+	var writeCount int64
 	var wch chan writer.Record
 	var wclosed <-chan error
 	if txout != nil {
@@ -327,26 +337,30 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 		}
 	}
 
+	if err = txout.Commit(); err != nil {
+		return 0, err
+	}
+
 	return writeCount, nil
 }
 
-func index(txout *sql.Tx) error {
+func index(db *sql.DB) error {
 	var err error
 	// Index columns
 	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
-	if err = indexColumns(txout, cols); err != nil {
+	if err = indexColumns(db, cols); err != nil {
 		return err
 	}
 	// Create unique index
 	printerr("creating index: srs_id, line, field")
 	var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 	}
 	return nil
 }
 
-func indexColumns(txout *sql.Tx, cols []string) error {
+func indexColumns(db *sql.DB, cols []string) error {
 	var err error
 	var c string
 	for _, c = range cols {
@@ -354,14 +368,14 @@ func indexColumns(txout *sql.Tx, cols []string) error {
 			if !*noTrigramIndexFlag {
 				printerr("creating index: %s", c)
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
-				if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+				if _, err = db.ExecContext(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 				}
 			}
 		} else {
 			printerr("creating index: %s", c)
 			var q = "CREATE INDEX ON " + tableout + " (" + c + ");"
-			if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+			if _, err = db.ExecContext(context.TODO(), q); err != nil {
 				return fmt.Errorf("creating index: %s: %s", c, err)
 			}
 		}
@@ -369,42 +383,50 @@ func indexColumns(txout *sql.Tx, cols []string) error {
 	return nil
 }
 
-func replace(txout *sql.Tx) error {
+func replace(db *sql.DB) error {
 	var err error
 	var q = "DROP TABLE IF EXISTS folio_source_record.__marc;"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("renaming table: %s", err)
 	}
+	q = "DROP TABLE IF EXISTS " + tablefinal + ";"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("dropping table: %s", err)
+	}
+	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema + ";"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("moving table: %s", err)
+	}
 	for _, field := range allFields {
-		q = "DROP TABLE IF EXISTS " + ptableoutSchema + "." + tablefinalTable + "_" + field + ";"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + "_" + field + ";"
+		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("dropping table: %s", err)
 		}
-		q = "ALTER TABLE " + ptableout + "_" + field + " RENAME TO " + tablefinalTable + "_" + field + ";"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		q = "ALTER TABLE " + tableout + "_" + field + " RENAME TO " + tablefinalTable + "_" + field + ";"
+		if _, err = db.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("renaming table: %s", err)
 		}
 	}
 	return nil
 }
 
-func grant(txout *sql.Tx, user string) error {
+func grant(db *sql.DB, user string) error {
 	var err error
 	// Grant permission to LDP user
-	var q = "GRANT USAGE ON SCHEMA " + tableoutSchema + " TO " + user + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	var q = "GRANT USAGE ON SCHEMA " + tablefinalSchema + " TO " + user + ";"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("schema permission: %s", err)
 	}
-	q = "GRANT SELECT ON " + tableoutSchema + "." + tablefinalTable + " TO " + user + ";"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	q = "GRANT SELECT ON " + tablefinal + " TO " + user + ";"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("table permission: %s", err)
 	}
 	return nil
