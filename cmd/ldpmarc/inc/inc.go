@@ -11,7 +11,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 )
 
-const schemaVersion int64 = 4
+const schemaVersion int64 = 5
 const cksumTable = "ldpmarc.cksum"
 const metadataTableS = "ldpmarc"
 const metadataTableT = "metadata"
@@ -60,7 +60,7 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarcAttr string) error {
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	q = "CREATE TABLE " + cksumTable +
-		" AS SELECT r.id, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
+		" AS SELECT r.id::uuid, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
@@ -134,7 +134,7 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id = c.id WHERE c.id IS NULL;"
+	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating addition table: %s", err)
 	}
@@ -204,7 +204,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id = c.id WHERE r.id IS NULL;"
+	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
 	}
@@ -247,7 +247,7 @@ func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(st
 func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find changed data
-	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
+	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating change table: %s", err)
 	}
@@ -326,8 +326,8 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 
 func filterQuery(srsRecords, srsMarc, srsMarcAttr, filter string) string {
 	return "" +
-		"SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
+		"SELECT r.id::uuid, r.matched_id::uuid, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
 		"    FROM " + srsRecords + " r " +
-		"        JOIN " + filter + " f ON r.id = f.id " +
+		"        JOIN " + filter + " f ON r.id::uuid = f.id " +
 		"        JOIN " + srsMarc + " m ON r.id = m.id;"
 }
