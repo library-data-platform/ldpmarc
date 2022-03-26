@@ -31,10 +31,15 @@ var srsMarcAttrFlag = flag.String("j", "data", "Name of column containing MARC J
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
 var tableoutSchema = "public"
+var ptableoutSchema = "ldpmarc"
 var tableoutTable = "_srs_marctab"
 var tableout = tableoutSchema + "." + tableoutTable
+var ptableout = ptableoutSchema + "." + tableoutTable
 var tablefinalTable = "srs_marctab"
 var tablefinal = tableoutSchema + "." + tablefinalTable
+var ptablefinal = ptableoutSchema + "." + tablefinalTable
+
+var allFields = util.GetAllFieldNames()
 
 var csvFile *os.File
 
@@ -162,6 +167,8 @@ func fullUpdate(db *sql.DB) error {
 			return err
 		}
 		printerr("new table is ready to use: " + tablefinal)
+		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
+		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			printerr("writing checksums")
 			if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag); err != nil {
@@ -217,11 +224,11 @@ func process(db *sql.DB, txout *sql.Tx) (int64, error) {
 func setupTable(txout *sql.Tx) error {
 	var err error
 	var q string
-	q = "CREATE SCHEMA IF NOT EXISTS dbsystem;"
+	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
-	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
+	q = "CREATE SCHEMA IF NOT EXISTS " + ptableoutSchema + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
@@ -238,18 +245,17 @@ func setupTable(txout *sql.Tx) error {
 		"    ord smallint NOT NULL," +
 		"    sf varchar(1) NOT NULL," +
 		"    content varchar(65535) NOT NULL" +
-		");"
+		// "    content varchar(65535) NOT NULL COMPRESSION lz4" +
+		") PARTITION BY LIST (field);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)
 	}
-	q = "" +
-		"CREATE TABLE IF NOT EXISTS " + tableoutSchema + "." + tablefinalTable + " (" +
-		"    srs_id varchar(36) NOT NULL," +
-		"    line smallint NOT NULL," +
-		"    PRIMARY KEY (srs_id, line)" +
-		");"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating temp table: %s", err)
+	for _, field := range allFields {
+		q = "CREATE TABLE " + ptableout + "_" + field +
+			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "');"
+		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+			return fmt.Errorf("creating partition: %s", err)
+		}
 	}
 	return nil
 }
@@ -327,24 +333,15 @@ func processAll(txout *sql.Tx, rch <-chan reader.Record) (int64, error) {
 func index(txout *sql.Tx) error {
 	var err error
 	// Index columns
-	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "field", "ind1", "ind2", "ord", "sf"}
+	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
 	if err = indexColumns(txout, cols); err != nil {
 		return err
 	}
-	// Create primary key
-	var q = "SELECT constraint_name FROM information_schema.table_constraints WHERE constraint_name = '" + tableoutTable + "_pkey' LIMIT 1;"
-	var s string
-	if err = txout.QueryRowContext(context.TODO(), q).Scan(&s); err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	var suffix string
-	if err != sql.ErrNoRows {
-		suffix = "1"
-	}
-	printerr("creating index: srs_id, line")
-	q = "ALTER TABLE " + tableout + " ADD CONSTRAINT " + tableoutTable + "_pkey" + suffix + " PRIMARY KEY (srs_id, line);"
+	// Create unique index
+	printerr("creating index: srs_id, line, field")
+	var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating index: srs_id, line: %s", err)
+		return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 	}
 	return nil
 }
@@ -385,6 +382,16 @@ func replace(txout *sql.Tx) error {
 	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("renaming table: %s", err)
+	}
+	for _, field := range allFields {
+		q = "DROP TABLE IF EXISTS " + ptableoutSchema + "." + tablefinalTable + "_" + field + ";"
+		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+			return fmt.Errorf("dropping table: %s", err)
+		}
+		q = "ALTER TABLE " + ptableout + "_" + field + " RENAME TO " + tablefinalTable + "_" + field + ";"
+		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+			return fmt.Errorf("renaming table: %s", err)
+		}
 	}
 	return nil
 }

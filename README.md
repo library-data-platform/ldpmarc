@@ -15,7 +15,7 @@ System requirements
 -------------------
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 13.4 or later
+* [PostgreSQL](https://www.postgresql.org/) 13.6 or later
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
   * [LDP](https://github.com/library-data-platform/ldp) 1.4.2 or later
@@ -27,8 +27,17 @@ System requirements
   * [Docker](https://docker.com) 17.05 or later
 
 
-Enabling pg_trgm
-----------------
+Database configuration
+----------------------
+
+### PostgreSQL settings
+
+The PostgreSQL setting `max_locks_per_transaction` should be increased
+to avoid an "out of shared memory" error.  The recommended setting is:
+
+* `max_locks_per_transaction`: `1100`
+
+### Enabling pg_trgm
 
 The pg_trgm module is used to support the SQL `LIKE` and `ILIKE`
 pattern matching operators on MARC content data.  The module is
@@ -158,7 +167,7 @@ All ldpmarc data can be deleted from the database by dropping three
 tables:
 
 ```sql
-DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum, dbsystem.ldpmarc_metadata, public.srs_marctab;
+DROP TABLE IF EXISTS ldpmarc.cksum, ldpmarc.metadata, public.srs_marctab;
 ```
 
 This may be useful for uninstalling ldpmarc, or to restart it with a

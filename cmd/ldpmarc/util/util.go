@@ -86,3 +86,11 @@ func VacuumAnalyze(db *sql.DB, table string) error {
 	}
 	return nil
 }
+
+func GetAllFieldNames() []string {
+	s := make([]string, 0)
+	for i := 0; i <= 999; i++ {
+		s = append(s, fmt.Sprintf("%03d", i))
+	}
+	return s
+}
