@@ -45,7 +45,7 @@ func IncUpdateAvail(db *sql.DB) (bool, error) {
 	return true, nil
 }
 
-func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarcAttr string) error {
+func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarctab, srsMarcAttr string) error {
 	var err error
 	var tx *sql.Tx
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
@@ -60,7 +60,7 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarcAttr string) error {
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	q = "CREATE TABLE " + cksumTable +
-		" AS SELECT r.id::uuid, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
+		" AS SELECT r.id::uuid, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id JOIN " + srsMarctab + " mt ON r.id::uuid = mt.srs_id WHERE r.state = 'ACTUAL' AND mt.field = '999' AND mt.sf = 'i' AND mt.content <> '';"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
@@ -190,9 +190,11 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 			}
 		}
 		// cksum
-		q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
-		if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
-			return fmt.Errorf("adding record: %s", err)
+		if len(mrecs) != 0 {
+			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
+			if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
+				return fmt.Errorf("adding record: %s", err)
+			}
 		}
 	}
 	if err = rows.Err(); err != nil {
@@ -203,7 +205,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 
 func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
-	// find new data
+	// find deleted data
 	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
 	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
@@ -294,7 +296,19 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		if skip {
 			continue
 		}
-		// delete in finaltable
+		// check if there are existing rows in tablefinal
+		var exist bool
+		var i int64
+		q = "SELECT 1 FROM " + tablefinal + " WHERE srs_id='" + id + "' LIMIT 1"
+		err = db.QueryRowContext(context.TODO(), q).Scan(&i)
+		switch {
+		case err == sql.ErrNoRows:
+		case err != nil:
+			return err
+		default:
+			exist = true
+		}
+		// delete in tablefinal
 		q = "DELETE FROM " + tablefinal + " WHERE srs_id = '" + id + "';"
 		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("deleting record (change): %s", err)
@@ -312,10 +326,15 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 				return fmt.Errorf("rewriting record: %s", err)
 			}
 		}
+		if verbose && exist && len(mrecs) == 0 {
+			printerr("removing: id=%s", id)
+		}
 		// cksum
-		q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
-		if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
-			return fmt.Errorf("rewriting record: %s", err)
+		if len(mrecs) != 0 {
+			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
+			if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
+				return fmt.Errorf("rewriting record: %s", err)
+			}
 		}
 	}
 	if err = rows.Err(); err != nil {

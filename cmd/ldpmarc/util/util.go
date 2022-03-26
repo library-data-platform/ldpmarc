@@ -21,9 +21,6 @@ func Transform(r reader.Record, printerr func(string, ...interface{}), verbose b
 		return "", "", "", "", nil, true
 	}
 	var id string = r.ID.String
-	if verbose {
-		printerr("updating: id=%s", id)
-	}
 	if strings.TrimSpace(id) == "" {
 		printerr(skipValue(r.ID, r.Data))
 		return "", "", "", "", nil, true
@@ -55,6 +52,9 @@ func Transform(r reader.Record, printerr func(string, ...interface{}), verbose b
 	if mrecs, instanceID, err = srs.Transform(data, state); err != nil {
 		printerr(skipError(r.ID, err))
 		return "", "", "", "", nil, true
+	}
+	if verbose && len(mrecs) != 0 {
+		printerr("updating: id=%s", id)
 	}
 	return id, matchedID, instanceHRID, instanceID, mrecs, false
 }

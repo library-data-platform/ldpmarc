@@ -173,7 +173,7 @@ func fullUpdate(db *sql.DB) error {
 		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			printerr("writing checksums")
-			if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag); err != nil {
+			if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, tablefinal, *srsMarcAttrFlag); err != nil {
 				return err
 			}
 		}
