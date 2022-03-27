@@ -21,7 +21,7 @@ System requirements
 ### Software
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 14.2 or later
+* [PostgreSQL](https://www.postgresql.org/) 13.6 or later
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
   * [LDP](https://github.com/library-data-platform/ldp) 1.6.0 or later
