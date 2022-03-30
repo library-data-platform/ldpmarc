@@ -11,7 +11,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 )
 
-const schemaVersion int64 = 6
+const schemaVersion int64 = 7
 const cksumTable = "ldpmarc.cksum"
 const metadataTableS = "ldpmarc"
 const metadataTableT = "metadata"
@@ -121,12 +121,12 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.add")
-	var q = "CREATE UNLOGGED TABLE ldpmarc.add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_add")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.inc_add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating addition table: %s", err)
 	}
-	q = "ALTER TABLE ldpmarc.add ADD CONSTRAINT ldpmarc_add_pkey PRIMARY KEY (id);"
+	q = "ALTER TABLE ldpmarc.inc_add ADD CONSTRAINT ldpmarc_add_pkey PRIMARY KEY (id);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on addition table: %s", err)
 	}
@@ -136,7 +136,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	}
 	defer tx.Rollback()
 	// transform
-	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.add")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.inc_add")
 	var rows *sql.Rows
 	if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to add: %s", err)
@@ -187,7 +187,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.add"); err != nil {
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_add"); err != nil {
 		return fmt.Errorf("dropping addition table: %s", err)
 	}
 	return nil
@@ -196,18 +196,18 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find deleted data
-	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.delete")
-	var q = "CREATE UNLOGGED TABLE ldpmarc.delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_delete")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.inc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
 	}
-	q = "ALTER TABLE ldpmarc.delete ADD CONSTRAINT ldpmarc_delete_pkey PRIMARY KEY (id);"
+	q = "ALTER TABLE ldpmarc.inc_delete ADD CONSTRAINT ldpmarc_delete_pkey PRIMARY KEY (id);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on deletion table: %s", err)
 	}
 	if verbose {
 		// show changes
-		q = "SELECT id FROM ldpmarc.delete;"
+		q = "SELECT id FROM ldpmarc.inc_delete;"
 		var rows *sql.Rows
 		if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("reading deletion list: %s", err)
@@ -231,19 +231,19 @@ func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(strin
 	}
 	defer tx.Rollback()
 	// delete in finaltable
-	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc.delete);"
+	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc.inc_delete);"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("deleting records: %s", err)
 	}
 	// delete in cksum table
-	q = "DELETE FROM " + cksumTable + " WHERE id IN (SELECT id FROM ldpmarc.delete);"
+	q = "DELETE FROM " + cksumTable + " WHERE id IN (SELECT id FROM ldpmarc.inc_delete);"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("deleting cksum: %s", err)
 	}
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.delete"); err != nil {
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_delete"); err != nil {
 		return fmt.Errorf("dropping deletion table: %s", err)
 	}
 	return nil
@@ -252,12 +252,12 @@ func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(strin
 func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find changed data
-	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.change")
-	var q = "CREATE UNLOGGED TABLE ldpmarc.change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_change")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.inc_change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating change table: %s", err)
 	}
-	q = "ALTER TABLE ldpmarc.change ADD CONSTRAINT ldpmarc_change_pkey PRIMARY KEY (id);"
+	q = "ALTER TABLE ldpmarc.inc_change ADD CONSTRAINT ldpmarc_change_pkey PRIMARY KEY (id);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on change table: %s", err)
 	}
@@ -267,7 +267,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	}
 	defer tx.Rollback()
 	// transform
-	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.change")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.inc_change")
 	var rows *sql.Rows
 	if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to change: %s", err)
@@ -343,7 +343,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.change"); err != nil {
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_change"); err != nil {
 		return fmt.Errorf("dropping change table: %s", err)
 	}
 	return nil

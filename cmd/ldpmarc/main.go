@@ -119,7 +119,7 @@ func run() error {
 				for _, field := range allFields {
 					_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
 				}
-				os.Exit(1)
+				os.Exit(130)
 			}
 		}()
 		// Run full update
