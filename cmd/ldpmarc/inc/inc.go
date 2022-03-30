@@ -51,9 +51,7 @@ func CreateCksum(db *sql.DB, srsRecords, srsMarc, srsMarctab, srsMarcAttr string
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer func(tx *sql.Tx) {
-		_ = tx.Rollback()
-	}(tx)
+	defer tx.Rollback()
 	// cksum
 	var q = "DROP TABLE IF EXISTS " + cksumTable + ";"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
@@ -97,27 +95,16 @@ func VacuumCksum(db *sql.DB) error {
 
 func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
-	var txout *sql.Tx
-	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
-		return err
-	}
-	defer func(txout *sql.Tx) {
-		_ = txout.Rollback()
-	}(txout)
 	// add new data
-	if err = updateNew(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, txout, printerr, verbose); err != nil {
+	if err = updateNew(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
 		return err
 	}
 	// remove deleted data
-	if err = updateDelete(srsRecords, tablefinal, txout, printerr, verbose); err != nil {
+	if err = updateDelete(db, srsRecords, tablefinal, printerr, verbose); err != nil {
 		return err
 	}
 	// replace modified data
-	if err = updateChange(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, txout, printerr, verbose); err != nil {
-		return err
-	}
-	// commit
-	if err = txout.Commit(); err != nil {
+	if err = updateChange(db, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
 		return err
 	}
 	// vacuum
@@ -131,34 +118,29 @@ func IncUpdate(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	return nil
 }
 
-func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
+func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find new data
-	var q = "CREATE TEMP TABLE ldpmarc_add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.add")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.add AS SELECT r.id::uuid FROM " + srsRecords + " r LEFT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE c.id IS NULL;"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating addition table: %s", err)
 	}
-	q = "ALTER TABLE ldpmarc_add ADD CONSTRAINT ldpmarc_add_pkey PRIMARY KEY (id);"
+	q = "ALTER TABLE ldpmarc.add ADD CONSTRAINT ldpmarc_add_pkey PRIMARY KEY (id);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on addition table: %s", err)
 	}
-	// txn for select
 	var tx *sql.Tx
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer func(tx *sql.Tx) {
-		_ = tx.Rollback()
-	}(tx)
 	// transform
-	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_add")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.add")
 	var rows *sql.Rows
-	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
+	if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to add: %s", err)
 	}
-	defer func(rows *sql.Rows) {
-		_ = rows.Close()
-	}(rows)
+	defer rows.Close()
 	for rows.Next() {
 		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
 		var cksum string
@@ -184,7 +166,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 		var m srs.Marc
 		for _, m = range mrecs {
 			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
-			if _, err = txout.ExecContext(context.TODO(), q,
+			if _, err = tx.ExecContext(context.TODO(), q,
 				id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return fmt.Errorf("adding record: %s", err)
 			}
@@ -192,33 +174,40 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 		// cksum
 		if len(mrecs) != 0 {
 			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
-			if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
-				return fmt.Errorf("adding record: %s", err)
+			if _, err = tx.ExecContext(context.TODO(), q, id, cksum); err != nil {
+				return fmt.Errorf("adding cksum: %s", err)
 			}
 		}
 	}
 	if err = rows.Err(); err != nil {
 		return err
 	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.add"); err != nil {
+		return fmt.Errorf("dropping addition table: %s", err)
+	}
 	return nil
 }
 
-func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
+func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
 	var err error
 	// find deleted data
-	var q = "CREATE TEMP TABLE ldpmarc_delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.delete")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.delete AS SELECT c.id FROM " + srsRecords + " r RIGHT JOIN " + cksumTable + " c ON r.id::uuid = c.id WHERE r.id IS NULL;"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
 	}
-	q = "ALTER TABLE ldpmarc_delete ADD CONSTRAINT ldpmarc_delete_pkey PRIMARY KEY (id);"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+	q = "ALTER TABLE ldpmarc.delete ADD CONSTRAINT ldpmarc_delete_pkey PRIMARY KEY (id);"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on deletion table: %s", err)
 	}
-	// show changes
 	if verbose {
-		q = "SELECT id FROM ldpmarc_delete;"
+		// show changes
+		q = "SELECT id FROM ldpmarc.delete;"
 		var rows *sql.Rows
-		if rows, err = txout.QueryContext(context.TODO(), q); err != nil {
+		if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("reading deletion list: %s", err)
 		}
 		for rows.Next() {
@@ -233,47 +222,52 @@ func updateDelete(srsRecords, tablefinal string, txout *sql.Tx, printerr func(st
 		}
 		_ = rows.Close()
 	}
-	// delete in finaltable
-	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc_delete);"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("deleting records: %s", err)
-	}
-	// delete in cksum table
-	q = "DELETE FROM " + cksumTable + " WHERE id IN (SELECT id FROM ldpmarc_delete);"
-	if _, err = txout.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("deleting cksum: %s", err)
-	}
-	return nil
-}
-
-func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, txout *sql.Tx, printerr func(string, ...interface{}), verbose bool) error {
-	var err error
-	// find changed data
-	var q = "CREATE TEMP TABLE ldpmarc_change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating change table: %s", err)
-	}
-	q = "ALTER TABLE ldpmarc_change ADD CONSTRAINT ldpmarc_change_pkey PRIMARY KEY (id);"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating primary key on change table: %s", err)
-	}
-	// txn for select
 	var tx *sql.Tx
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
-	defer func(tx *sql.Tx) {
-		_ = tx.Rollback()
-	}(tx)
+	// delete in finaltable
+	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc.delete);"
+	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("deleting records: %s", err)
+	}
+	// delete in cksum table
+	q = "DELETE FROM " + cksumTable + " WHERE id IN (SELECT id FROM ldpmarc.delete);"
+	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("deleting cksum: %s", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.delete"); err != nil {
+		return fmt.Errorf("dropping deletion table: %s", err)
+	}
+	return nil
+}
+
+func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+	var err error
+	// find changed data
+	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.change")
+	var q = "CREATE UNLOGGED TABLE ldpmarc.change AS SELECT r.id::uuid FROM " + srsRecords + " r JOIN " + cksumTable + " c ON r.id::uuid = c.id JOIN " + srsMarc + " m ON r.id = m.id WHERE " + util.MD5(srsMarcAttr) + " <> c.cksum;"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("creating change table: %s", err)
+	}
+	q = "ALTER TABLE ldpmarc.change ADD CONSTRAINT ldpmarc_change_pkey PRIMARY KEY (id);"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("creating primary key on change table: %s", err)
+	}
+	var tx *sql.Tx
+	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
+		return err
+	}
 	// transform
-	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc_change")
+	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.change")
 	var rows *sql.Rows
-	if rows, err = tx.QueryContext(context.TODO(), q); err != nil {
+	if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("selecting records to change: %s", err)
 	}
-	defer func(rows *sql.Rows) {
-		_ = rows.Close()
-	}(rows)
+	defer rows.Close()
 	for rows.Next() {
 		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
 		var cksum string
@@ -310,18 +304,18 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		}
 		// delete in tablefinal
 		q = "DELETE FROM " + tablefinal + " WHERE srs_id = '" + id + "';"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("deleting record (change): %s", err)
 		}
 		// delete in cksum table
 		q = "DELETE FROM " + cksumTable + " WHERE id = '" + id + "';"
-		if _, err = txout.ExecContext(context.TODO(), q); err != nil {
+		if _, err = tx.ExecContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("deleting cksum (change): %s", err)
 		}
 		var m srs.Marc
 		for _, m = range mrecs {
 			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
-			if _, err = txout.ExecContext(context.TODO(), q,
+			if _, err = tx.ExecContext(context.TODO(), q,
 				id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return fmt.Errorf("rewriting record: %s", err)
 			}
@@ -332,13 +326,19 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		// cksum
 		if len(mrecs) != 0 {
 			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
-			if _, err = txout.ExecContext(context.TODO(), q, id, cksum); err != nil {
-				return fmt.Errorf("rewriting record: %s", err)
+			if _, err = tx.ExecContext(context.TODO(), q, id, cksum); err != nil {
+				return fmt.Errorf("rewriting cksum: %s", err)
 			}
 		}
 	}
 	if err = rows.Err(); err != nil {
 		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	if _, err = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.change"); err != nil {
+		return fmt.Errorf("dropping change table: %s", err)
 	}
 	return nil
 }
