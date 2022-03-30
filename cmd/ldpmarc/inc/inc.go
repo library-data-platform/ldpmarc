@@ -134,6 +134,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	// transform
 	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.add")
 	var rows *sql.Rows
@@ -182,6 +183,7 @@ func updateNew(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal string, 
 	if err = rows.Err(); err != nil {
 		return err
 	}
+	rows.Close()
 	if err = tx.Commit(); err != nil {
 		return err
 	}
@@ -210,6 +212,7 @@ func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(strin
 		if rows, err = db.QueryContext(context.TODO(), q); err != nil {
 			return fmt.Errorf("reading deletion list: %s", err)
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var id string
 			if err = rows.Scan(&id); err != nil {
@@ -220,12 +223,13 @@ func updateDelete(db *sql.DB, srsRecords, tablefinal string, printerr func(strin
 		if err = rows.Err(); err != nil {
 			return fmt.Errorf("reading deletion rows: %s", err)
 		}
-		_ = rows.Close()
+		rows.Close()
 	}
 	var tx *sql.Tx
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	// delete in finaltable
 	q = "DELETE FROM " + tablefinal + " WHERE srs_id IN (SELECT id FROM ldpmarc.delete);"
 	if _, err = tx.ExecContext(context.TODO(), q); err != nil {
@@ -261,6 +265,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if tx, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	// transform
 	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.change")
 	var rows *sql.Rows
@@ -334,6 +339,7 @@ func updateChange(db *sql.DB, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if err = rows.Err(); err != nil {
 		return err
 	}
+	rows.Close()
 	if err = tx.Commit(); err != nil {
 		return err
 	}
