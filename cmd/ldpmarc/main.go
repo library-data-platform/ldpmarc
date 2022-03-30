@@ -93,6 +93,9 @@ func run() error {
 	if db, err = openDB(host, port, user, password, dbname, sslmode); err != nil {
 		return err
 	}
+	if _, err = db.ExecContext(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
+		return fmt.Errorf("creating schema: %s", err)
+	}
 	var incUpdateAvail bool
 	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
 		return err
@@ -227,14 +230,6 @@ func process(db *sql.DB) (int64, error) {
 func setupTable(db *sql.DB) error {
 	var err error
 	var q string
-	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating schema: %s", err)
-	}
-	q = "CREATE SCHEMA IF NOT EXISTS " + tableoutSchema + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating schema: %s", err)
-	}
 	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
 	var lz4 string
 	if util.IsLZ4Available(db) {
