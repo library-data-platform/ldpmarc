@@ -56,7 +56,7 @@ pattern matching operators on MARC content data.  The module is
 enabled in the database by a superuser:
 
 ```
-CREATE EXTENSION pg_trgm;
+CREATE EXTENSION pg_trgm WITH SCHEMA pg_catalog;
 ```
 
 Then grant the LDP administrator permission to use the extension,
