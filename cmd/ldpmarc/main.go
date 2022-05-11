@@ -96,6 +96,10 @@ func run() error {
 	if _, err = db.ExecContext(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
+	var q = "COMMENT ON SCHEMA " + tableoutSchema + " IS 'system tables for SRS MARC transform'"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("adding comment on schema: %s", err)
+	}
 	var incUpdateAvail bool
 	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
 		return err
@@ -251,6 +255,10 @@ func setupTable(db *sql.DB) error {
 		") PARTITION BY LIST (field);"
 	if _, err = db.ExecContext(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)
+	}
+	q = "COMMENT ON TABLE " + tableout + " IS 'current SRS MARC records in tabular form'"
+	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		return fmt.Errorf("adding comment on table: %s", err)
 	}
 	for _, field := range allFields {
 		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
