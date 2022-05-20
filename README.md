@@ -30,7 +30,7 @@ System requirements
   * [LDLite](https://github.com/library-data-platform/ldlite)
   * [Metadb](https://github.com/metadb-project/metadb) with [migration tables](https://github.com/folio-org/folio-analytics/tree/main/sql_migration)
 * Required to build from source:
-  * [Go](https://golang.org/) 1.17.8 or later
+  * [Go](https://golang.org/) 1.18 or later
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
 
