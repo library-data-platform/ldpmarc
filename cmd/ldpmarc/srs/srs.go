@@ -108,7 +108,7 @@ func Transform(marcjson string, state string) ([]Marc, string, error) {
 
 		}
 	}
-	// Extract the instance identifier from 999i.
+	// Extract the instance identifier from 999$i.
 	var instanceID string = getInstanceID(mrecs)
 	// If the MARC record is not current, return nothing.
 	if !isCurrent(state, instanceID) {
@@ -188,7 +188,7 @@ func getLeader(m map[string]interface{}) (string, error) {
 func getInstanceID(mrecs []Marc) string {
 	var rec Marc
 	for _, rec = range mrecs {
-		if rec.Field == "999" && rec.SF == "i" && rec.Content != "" {
+		if rec.Field == "999" && rec.Ind1 == "f" && rec.Ind2 == "f" && rec.SF == "i" && rec.Content != "" {
 			return rec.Content
 		}
 	}
