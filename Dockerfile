@@ -1,4 +1,4 @@
-FROM golang:1.17-bullseye AS builder
+FROM golang:1.18-bullseye AS builder
 
 WORKDIR /usr/src/ldpmarc
 COPY . /usr/src/ldpmarc
