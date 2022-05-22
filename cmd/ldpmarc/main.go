@@ -320,7 +320,9 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 				record.Ord = m.Ord
 				record.SF = m.SF
 				record.Content = m.Content
-				store.Write(&record)
+				if err = store.Write(&record); err != nil {
+					return 0, fmt.Errorf("writing record: %v: %v", err, record)
+				}
 			} else {
 				_, _ = fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", *id, m.Line, *matchedID, *instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 			}
