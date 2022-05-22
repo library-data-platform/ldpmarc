@@ -2,11 +2,10 @@ package util
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/reader"
+	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 )
 
@@ -15,43 +14,41 @@ func MD5(srsMarcAttr string) string {
 	return "md5(coalesce(r.external_hrid::text, '') || coalesce(r.external_id::text, '') || coalesce(r.matched_id::text, '') || coalesce(r.state::text, '') || coalesce(m." + srsMarcAttr + "::text, ''))"
 }
 
-func Transform(r reader.Record, printerr func(string, ...interface{}), verbose bool) (string, string, string, string, []srs.Marc, bool) {
-	if !r.ID.Valid {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
+func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(string, ...interface{}), verbose bool) (*string, *string, *string, string, []srs.Marc, bool) {
+	if id == nil {
+		printerr(skipValue(id, data))
+		return nil, nil, nil, "", nil, true
 	}
-	var id string = r.ID.String
-	if strings.TrimSpace(id) == "" {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
+	if strings.TrimSpace(*id) == "" {
+		printerr(skipValue(id, data))
+		return nil, nil, nil, "", nil, true
 	}
-	if !r.Data.Valid {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
+	if data == nil {
+		printerr(skipValue(id, data))
+		return nil, nil, nil, "", nil, true
 	}
-	var data string = r.Data.String
-	if strings.TrimSpace(data) == "" {
-		printerr(skipValue(r.ID, r.Data))
-		return "", "", "", "", nil, true
+	if strings.TrimSpace(*data) == "" {
+		printerr(skipValue(id, data))
+		return nil, nil, nil, "", nil, true
 	}
-	var matchedID string = r.MatchedID.String
-	if !r.MatchedID.Valid {
-		matchedID = ""
+	if matchedID == nil {
+		s := ""
+		matchedID = &s
 	}
-	var instanceHRID string = r.InstanceHRID.String
-	if !r.InstanceHRID.Valid {
-		instanceHRID = ""
+	if instanceHRID == nil {
+		s := ""
+		instanceHRID = &s
 	}
-	var state string = r.State.String
-	if !r.State.Valid {
-		state = ""
+	if state == nil {
+		s := ""
+		state = &s
 	}
 	var mrecs []srs.Marc
 	var instanceID string
 	var err error
-	if mrecs, instanceID, err = srs.Transform(data, state); err != nil {
-		printerr(skipError(r.ID, err))
-		return "", "", "", "", nil, true
+	if mrecs, instanceID, err = srs.Transform(data, *state); err != nil {
+		printerr(skipError(id, err))
+		return nil, nil, nil, "", nil, true
 	}
 	if verbose && len(mrecs) != 0 {
 		printerr("updating: id=%s", id)
@@ -59,29 +56,30 @@ func Transform(r reader.Record, printerr func(string, ...interface{}), verbose b
 	return id, matchedID, instanceHRID, instanceID, mrecs, false
 }
 
-func skipValue(idN, dataN sql.NullString) string {
-	return fmt.Sprintf("skipping record: %s", idData(idN, dataN))
+func skipValue(id, data *string) string {
+	return fmt.Sprintf("skipping record: %s", idData(id, data))
 }
 
-func skipError(idN sql.NullString, err error) string {
-	return fmt.Sprintf("skipping record: %s: %s", nullString(idN), err)
+func skipError(id *string, err error) string {
+	return fmt.Sprintf("skipping record: %s: %s", nullString(id), err)
 }
 
-func idData(idN, dataN sql.NullString) string {
-	return fmt.Sprintf("id=%s data=%s", nullString(idN), nullString(dataN))
+func idData(id, data *string) string {
+	return fmt.Sprintf("id=%s data=%s", nullString(id), nullString(data))
 }
 
-func nullString(s sql.NullString) string {
-	if s.Valid {
-		return s.String
+func nullString(s *string) string {
+	if s != nil {
+		return *s
 	} else {
 		return "(null)"
 	}
 }
 
-func VacuumAnalyze(db *sql.DB, table string) error {
+func VacuumAnalyze(dbc *DBC, table string) error {
+	var err error
 	q := "VACUUM ANALYZE " + table + ";"
-	if _, err := db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("vacuuming table: %s: %s", table, err)
 	}
 	return nil
@@ -95,10 +93,24 @@ func GetAllFieldNames() []string {
 	return s
 }
 
-func IsLZ4Available(db *sql.DB) bool {
-	if _, err := db.ExecContext(context.TODO(), "CREATE TEMP TABLE lz4test (v varchar(1) COMPRESSION lz4)"); err != nil {
+func IsLZ4Available(dbc *DBC) bool {
+	if _, err := dbc.Conn.Exec(context.TODO(), "CREATE TEMP TABLE lz4test (v varchar(1) COMPRESSION lz4)"); err != nil {
 		return false
 	}
-	_, _ = db.ExecContext(context.TODO(), "DROP TABLE lz4test")
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE lz4test")
 	return true
+}
+
+func BeginTx(ctx context.Context, conn *pgx.Conn) (pgx.Tx, error) {
+	var err error
+	var tx pgx.Tx
+	if tx, err = conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"}); err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+type DBC struct {
+	Conn       *pgx.Conn
+	ConnString string
 }

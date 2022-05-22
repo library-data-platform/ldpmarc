@@ -17,6 +17,7 @@ System requirements
 ### Hardware
 
 * Database storage (estimated): 500 GB
+* Local storage (estimated): 500 GB
 
 ### Software
 

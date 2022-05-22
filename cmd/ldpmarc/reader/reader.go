@@ -1,8 +1,12 @@
 package reader
 
+/*
+
 import (
 	"context"
 	"database/sql"
+
+	"github.com/jackc/pgx/v4"
 )
 
 type Record struct {
@@ -15,12 +19,12 @@ type Record struct {
 	Data         sql.NullString
 }
 
-func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, srsMarcAttr string) <-chan Record {
+func ReadAll(txin pgx.Tx, srsRecords string, srsMarc string, srsMarcAttr string) <-chan Record {
 	var ch = make(chan Record, 1000)
 	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + " FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id;"
-	var rows *sql.Rows
+	var rows pgx.Rows
 	var err error
-	if rows, err = txin.QueryContext(context.TODO(), q); err != nil {
+	if rows, err = txin.Query(context.TODO(), q); err != nil {
 		ch <- Record{Stop: true, Err: err}
 		return ch
 	}
@@ -28,7 +32,7 @@ func ReadAll(txin *sql.Tx, srsRecords string, srsMarc string, srsMarcAttr string
 	return ch
 }
 
-func scanAll(rows *sql.Rows, ch chan Record) {
+func scanAll(rows pgx.Rows, ch chan Record) {
 	var err error
 	for {
 		if !rows.Next() {
@@ -36,7 +40,7 @@ func scanAll(rows *sql.Rows, ch chan Record) {
 				ch <- Record{Stop: true, Err: err}
 				return
 			}
-			_ = rows.Close()
+			rows.Close()
 			ch <- Record{Stop: true, Err: nil}
 			return
 		}
@@ -60,3 +64,5 @@ func scanAll(rows *sql.Rows, ch chan Record) {
 		}
 	}
 }
+
+*/

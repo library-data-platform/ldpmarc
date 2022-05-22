@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -11,12 +10,12 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/jackc/pgx/v4"
 	_ "github.com/lib/pq"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/reader"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/local"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/writer"
 	"github.com/spf13/viper"
 )
 
@@ -88,26 +87,20 @@ func run() error {
 	var password = viper.GetString(ldp + ".database_password")
 	var dbname = viper.GetString(ldp + ".database_name")
 	var sslmode = viper.GetString(ldp + ".database_sslmode")
-	// Open database
-	var db *sql.DB
-	if db, err = openDB(host, port, user, password, dbname, sslmode); err != nil {
+	var dbc = new(util.DBC)
+	dbc.ConnString = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=" + sslmode
+	if dbc.Conn, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
 		return err
 	}
-	if _, err = db.ExecContext(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
-		return fmt.Errorf("creating schema: %s", err)
-	}
-	var q = "COMMENT ON SCHEMA " + tableoutSchema + " IS 'system tables for SRS MARC transform'"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
-		return fmt.Errorf("adding comment on schema: %s", err)
-	}
+	defer dbc.Conn.Close(context.TODO())
 	var incUpdateAvail bool
-	if incUpdateAvail, err = inc.IncUpdateAvail(db); err != nil {
+	if incUpdateAvail, err = inc.IncUpdateAvail(dbc); err != nil {
 		return err
 	}
 	_ = incUpdateFlag
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("incremental update")
-		if err = inc.IncUpdate(db, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(dbc, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -119,33 +112,52 @@ func run() error {
 			for _ = range c {
 				_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
 				_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
-				_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
-				for _, field := range allFields {
-					_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+				var err error
+				var conn *pgx.Conn
+				conn, err = pgx.Connect(context.TODO(), dbc.ConnString)
+				if err == nil {
+					_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+					for _, field := range allFields {
+						_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+					}
+					conn.Close(context.TODO())
 				}
 				os.Exit(130)
 			}
 		}()
 		// Run full update
-		if err = fullUpdate(db); err != nil {
-			_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+		if err = fullUpdate(dbc); err != nil {
+			var err2 error
+			var conn *pgx.Conn
+			conn, err2 = pgx.Connect(context.TODO(), dbc.ConnString)
+			if err2 == nil {
+				_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+				conn.Close(context.TODO())
+			}
 			return err
 		}
 	}
 	return nil
 }
 
-func openDB(host, port, user, password, dbname, sslmode string) (*sql.DB, error) {
-	var connstr = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=" + sslmode
+func setupSchema(connstr string) error {
 	var err error
-	var db *sql.DB
-	if db, err = sql.Open("postgres", connstr); err != nil {
-		return nil, fmt.Errorf("unable to open database: %s: %s", dbname, err)
+	var conn *pgx.Conn
+	if conn, err = pgx.Connect(context.TODO(), connstr); err != nil {
+		return err
 	}
-	return db, nil
+	defer conn.Close(context.TODO())
+	if _, err = conn.Exec(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
+		return fmt.Errorf("creating schema: %s", err)
+	}
+	var q = "COMMENT ON SCHEMA " + tableoutSchema + " IS 'system tables for SRS MARC transform'"
+	if _, err = conn.Exec(context.TODO(), q); err != nil {
+		return fmt.Errorf("adding comment on schema: %s", err)
+	}
+	return nil
 }
 
-func fullUpdate(db *sql.DB) error {
+func fullUpdate(dbc *util.DBC) error {
 	var err error
 	if *csvFilenameFlag != "" {
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
@@ -157,38 +169,38 @@ func fullUpdate(db *sql.DB) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	inputCount, err := process(db)
+	inputCount, err := process(dbc)
 	if err != nil {
 		return err
 	}
 	if *csvFilenameFlag == "" {
 		// Index columns
-		if err = index(db); err != nil {
+		if err = index(dbc); err != nil {
 			return err
 		}
 		// Replace table
-		if err = replace(db); err != nil {
+		if err = replace(dbc); err != nil {
 			return err
 		}
 		// Grant permission to LDP user
 		if ldpUserFlag != nil && *ldpUserFlag != "" {
-			if err = grant(db, *ldpUserFlag); err != nil {
+			if err = grant(dbc, *ldpUserFlag); err != nil {
 				return err
 			}
 		}
-		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
-		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
+		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
+		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			printerr("writing checksums")
-			if err = inc.CreateCksum(db, *srsRecordsFlag, *srsMarcFlag, tablefinal, *srsMarcAttrFlag); err != nil {
+			if err = inc.CreateCksum(dbc, *srsRecordsFlag, *srsMarcFlag, tablefinal, *srsMarcAttrFlag); err != nil {
 				return err
 			}
 		}
 		printerr("vacuuming")
-		if err = util.VacuumAnalyze(db, tablefinal); err != nil {
+		if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
 			return err
 		}
-		if err = inc.VacuumCksum(db); err != nil {
+		if err = inc.VacuumCksum(dbc); err != nil {
 			return err
 		}
 		printerr("new table is ready to use: " + tablefinal)
@@ -196,47 +208,39 @@ func fullUpdate(db *sql.DB) error {
 	return nil
 }
 
-func process(db *sql.DB) (int64, error) {
+func process(dbc *util.DBC) (int64, error) {
 	var err error
-	if db != nil {
-		if err = setupTable(db); err != nil {
-			return 0, err
-		}
+	var store *local.Store
+	if store, err = local.NewStore(*datadirFlag); err != nil {
+		return 0, err
+	}
+	defer store.Close()
+	if err = setupTables(dbc); err != nil {
+		return 0, err
 	}
 
-	// Begin reader transaction
-	var txin *sql.Tx
-	if txin, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
-		return 0, err
-	} // Deferred txin.Rollback() causes process to hang
-	// read number of input records
 	var inputCount int64
-	if inputCount, err = selectCount(txin, *srsRecordsFlag); err != nil {
+	if inputCount, err = selectCount(dbc, *srsRecordsFlag); err != nil {
 		return 0, err
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
-	var rch <-chan reader.Record = reader.ReadAll(txin, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag)
 	var writeCount int64
 	if inputCount > 0 {
-		if writeCount, err = processAll(db, rch); err != nil {
+		if writeCount, err = processAll(dbc, store); err != nil {
 			return 0, err
 		}
-	}
-	// Commit
-	if err = txin.Rollback(); err != nil {
-		return 0, err
 	}
 	printerr("%d output rows", writeCount)
 	return inputCount, nil
 }
 
-func setupTable(db *sql.DB) error {
+func setupTables(dbc *util.DBC) error {
 	var err error
 	var q string
-	_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
 	var lz4 string
-	if util.IsLZ4Available(db) {
+	if util.IsLZ4Available(dbc) {
 		lz4 = " COMPRESSION lz4"
 	}
 	q = "" +
@@ -253,120 +257,122 @@ func setupTable(db *sql.DB) error {
 		"    sf varchar(1) NOT NULL," +
 		"    content varchar(65535)" + lz4 + " NOT NULL" +
 		") PARTITION BY LIST (field);"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)
 	}
 	q = "COMMENT ON TABLE " + tableout + " IS 'current SRS MARC records in tabular form'"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("adding comment on table: %s", err)
 	}
 	for _, field := range allFields {
-		_, _ = db.ExecContext(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
 		q = "CREATE TABLE " + tableout + "_" + field +
 			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "');"
-		if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
 	}
 	return nil
 }
 
-func selectCount(txin *sql.Tx, tablein string) (int64, error) {
+func selectCount(dbc *util.DBC, tablein string) (int64, error) {
 	var err error
 	var count int64
 	var q = "SELECT count(*) FROM " + tablein + ";"
-	if err = txin.QueryRowContext(context.TODO(), q).Scan(&count); err != nil {
+	if err = dbc.Conn.QueryRow(context.TODO(), q).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
 }
 
-func processAll(db *sql.DB, rch <-chan reader.Record) (int64, error) {
+func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 	var err error
-	// Begin output transaction
-	var txout *sql.Tx
-	if txout, err = db.BeginTx(context.TODO(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil {
-		return 0, err
-	}
 	var writeCount int64
-	var wch chan writer.Record
-	var wclosed <-chan error
-	if txout != nil {
-		wch, wclosed = writer.WriteAll(txout, tableoutSchema, tableoutTable)
+	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + *srsMarcAttrFlag + " FROM " + *srsRecordsFlag + " r JOIN " + *srsMarcFlag + " m ON r.id = m.id"
+	var rows pgx.Rows
+	if rows, err = dbc.Conn.Query(context.TODO(), q); err != nil {
+		return 0, fmt.Errorf("selecting marc records: %v", err)
 	}
-	for {
-		var inrec reader.Record = <-rch
-		if inrec.Stop {
-			if inrec.Err != nil {
-				return 0, err
-			}
-			break
+	for rows.Next() {
+		var id, matchedID, instanceHRID, state, data *string
+		if err = rows.Scan(&id, &matchedID, &instanceHRID, &state, &data); err != nil {
+			return 0, fmt.Errorf("scanning records: %v", err)
 		}
-		var id, matchedID, instanceHRID, instanceID string
+		var record local.Record
+		var instanceID string
 		var mrecs []srs.Marc
 		var skip bool
-		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(inrec, printerr, *verboseFlag)
+		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(id, matchedID, instanceHRID, state, data, printerr, *verboseFlag)
 		if skip {
 			continue
 		}
 		var m srs.Marc
 		for _, m = range mrecs {
-			if txout != nil {
-				wch <- writer.Record{
-					Close:        false,
-					Stop:         false,
-					Err:          nil,
-					SRSID:        id,
-					Line:         m.Line,
-					MatchedID:    matchedID,
-					InstanceHRID: instanceHRID,
-					InstanceID:   instanceID,
-					Field:        m.Field,
-					Ind1:         m.Ind1,
-					Ind2:         m.Ind2,
-					Ord:          m.Ord,
-					SF:           m.SF,
-					Content:      m.Content,
-				}
+			if *csvFilenameFlag == "" {
+				record.SRSID = *id
+				record.Line = m.Line
+				record.MatchedID = *matchedID
+				record.InstanceHRID = *instanceHRID
+				record.InstanceID = instanceID
+				record.Field = m.Field
+				record.Ind1 = m.Ind1
+				record.Ind2 = m.Ind2
+				record.Ord = m.Ord
+				record.SF = m.SF
+				record.Content = m.Content
+				store.Write(&record)
 			} else {
-				_, _ = fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+				_, _ = fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", *id, m.Line, *matchedID, *instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
 			}
 			writeCount++
 		}
 	}
+	if rows.Err() != nil {
+		return 0, fmt.Errorf("row error: %v", rows.Err())
+	}
+	rows.Close()
 
-	if txout != nil {
-		wch <- writer.Record{Close: true}
-		err = <-wclosed
+	if err = store.FinishWriting(); err != nil {
+		return 0, err
+	}
+
+	var allFields = util.GetAllFieldNames()
+	var f string
+	for _, f = range allFields {
+		src, err := store.ReadSource(f)
 		if err != nil {
 			return 0, err
 		}
-	}
-
-	if err = txout.Commit(); err != nil {
-		return 0, err
+		_, err = dbc.Conn.CopyFrom(context.TODO(),
+			pgx.Identifier{tableoutSchema, tableoutTable + "_" + f},
+			[]string{"srs_id", "line", "matched_id", "instance_hrid", "instance_id", "field", "ind1", "ind2", "ord", "sf", "content"},
+			src)
+		if err != nil {
+			return 0, fmt.Errorf("copying to database: %v", err)
+		}
+		src.Close()
 	}
 
 	return writeCount, nil
 }
 
-func index(db *sql.DB) error {
+func index(dbc *util.DBC) error {
 	var err error
 	// Index columns
 	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
-	if err = indexColumns(db, cols); err != nil {
+	if err = indexColumns(dbc, cols); err != nil {
 		return err
 	}
 	// Create unique index
 	printerr("creating index: srs_id, line, field")
 	var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 	}
 	return nil
 }
 
-func indexColumns(db *sql.DB, cols []string) error {
+func indexColumns(dbc *util.DBC, cols []string) error {
 	var err error
 	var c string
 	for _, c = range cols {
@@ -374,14 +380,14 @@ func indexColumns(db *sql.DB, cols []string) error {
 			if !*noTrigramIndexFlag {
 				printerr("creating index: %s", c)
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
-				if _, err = db.ExecContext(context.TODO(), q); err != nil {
+				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 				}
 			}
 		} else {
 			printerr("creating index: %s", c)
 			var q = "CREATE INDEX ON " + tableout + " (" + c + ");"
-			if _, err = db.ExecContext(context.TODO(), q); err != nil {
+			if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 				return fmt.Errorf("creating index: %s: %s", c, err)
 			}
 		}
@@ -389,50 +395,50 @@ func indexColumns(db *sql.DB, cols []string) error {
 	return nil
 }
 
-func replace(db *sql.DB) error {
+func replace(dbc *util.DBC) error {
 	var err error
 	var q = "DROP TABLE IF EXISTS folio_source_record.__marc;"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("renaming table: %s", err)
 	}
 	q = "DROP TABLE IF EXISTS " + tablefinal + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("moving table: %s", err)
 	}
 	for _, field := range allFields {
 		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + "_" + field + ";"
-		if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("dropping table: %s", err)
 		}
 		q = "ALTER TABLE " + tableout + "_" + field + " RENAME TO " + tablefinalTable + "_" + field + ";"
-		if _, err = db.ExecContext(context.TODO(), q); err != nil {
+		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("renaming table: %s", err)
 		}
 	}
 	return nil
 }
 
-func grant(db *sql.DB, user string) error {
+func grant(dbc *util.DBC, user string) error {
 	var err error
 	// Grant permission to LDP user
 	var q = "GRANT USAGE ON SCHEMA " + tablefinalSchema + " TO " + user + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("schema permission: %s", err)
 	}
 	q = "GRANT SELECT ON " + tablefinal + " TO " + user + ";"
-	if _, err = db.ExecContext(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("table permission: %s", err)
 	}
 	return nil

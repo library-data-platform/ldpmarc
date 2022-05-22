@@ -1,9 +1,12 @@
 package writer
 
+/*
+
 import (
 	"context"
 	"database/sql"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/lib/pq"
 )
 
@@ -24,7 +27,7 @@ type Record struct {
 	Content      string
 }
 
-func WriteAll(txout *sql.Tx, schema string, table string) (chan Record, <-chan error) {
+func WriteAll(txout pgx.Tx, schema string, table string) (chan Record, <-chan error) {
 	var ch = make(chan Record, 1000)
 	var closed = make(chan error)
 	var stmt *sql.Stmt
@@ -39,7 +42,7 @@ func WriteAll(txout *sql.Tx, schema string, table string) (chan Record, <-chan e
 }
 
 func copyAll(stmt *sql.Stmt, ch chan Record, closed chan error) {
-	var err error
+	// var err error
 	for {
 		var r Record = <-ch
 		if r.Close {
@@ -60,3 +63,5 @@ func copyAll(stmt *sql.Stmt, ch chan Record, closed chan error) {
 		}
 	}
 }
+
+*/

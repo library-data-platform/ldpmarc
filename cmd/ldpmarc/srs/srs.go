@@ -25,7 +25,7 @@ type Marc struct {
 // returns the resultant table as a slice of Marc structs and the instance
 // identifer as a string.  If the MARC record is not current, Transform returns
 // an empty slice and the instance identifier as "".
-func Transform(marcjson string, state string) ([]Marc, string, error) {
+func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	// mrecs is the slice of Marc structs that will contain the transformed
 	// rows.
 	mrecs := make([]Marc, 0)
@@ -33,7 +33,7 @@ func Transform(marcjson string, state string) ([]Marc, string, error) {
 	// used to extract all of the required data from the MARC record.
 	var err error
 	var i interface{}
-	if err = json.Unmarshal([]byte(marcjson), &i); err != nil {
+	if err = json.Unmarshal([]byte(*marcjson), &i); err != nil {
 		return nil, "", err
 	}
 	var ok bool
