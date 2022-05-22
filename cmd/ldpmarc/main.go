@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/jackc/pgx/v4"
-	_ "github.com/lib/pq"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/local"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
