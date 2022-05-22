@@ -2,7 +2,6 @@ package inc
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 
@@ -97,23 +96,23 @@ func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	var err error
 	// add new data
 	if err = updateNew(dbc, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
-		return err
+		return fmt.Errorf("update new: %s", err)
 	}
 	// remove deleted data
 	if err = updateDelete(dbc, srsRecords, tablefinal, printerr, verbose); err != nil {
-		return err
+		return fmt.Errorf("update delete: %s", err)
 	}
 	// replace modified data
 	if err = updateChange(dbc, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
-		return err
+		return fmt.Errorf("update change: %s", err)
 	}
 	// vacuum
 	printerr("vacuuming")
 	if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
-		return err
+		return fmt.Errorf("vacuum analyze: %s", err)
 	}
 	if err = VacuumCksum(dbc); err != nil {
-		return err
+		return fmt.Errorf("vacuum cksum: %s", err)
 	}
 	return nil
 }
@@ -144,29 +143,19 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	q = filterQuery(srsRecords, srsMarc, srsMarcAttr, "ldpmarc.inc_add")
 	var rows pgx.Rows
 	if rows, err = dbc.Conn.Query(context.TODO(), q); err != nil {
-		return fmt.Errorf("selecting records to add: %s", err)
+		return fmt.Errorf("selecting records to add: %v", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
+		var id, matchedID, instanceHRID, state, data *string
 		var cksum string
-		if err = rows.Scan(&idN, &matchedIDN, &instanceHRIDN, &stateN, &dataN, &cksum); err != nil {
+		if err = rows.Scan(&id, &matchedID, &instanceHRID, &state, &data, &cksum); err != nil {
 			return err
 		}
-		// var inrec = reader.Record{
-		// 	Stop:         false,
-		// 	Err:          nil,
-		// 	ID:           idN,
-		// 	MatchedID:    matchedIDN,
-		// 	InstanceHRID: instanceHRIDN,
-		// 	State:        stateN,
-		// 	Data:         dataN,
-		// }
-		var id, matchedID, instanceHRID *string
 		var instanceID string
 		var mrecs []srs.Marc
 		var skip bool
-		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(nullToPtr(idN), nullToPtr(matchedIDN), nullToPtr(instanceHRIDN), nullToPtr(stateN), nullToPtr(dataN), printerr, verbose)
+		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(id, matchedID, instanceHRID, state, data, printerr, verbose)
 		if skip {
 			continue
 		}
@@ -175,14 +164,14 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
 			if _, err = tx.Exec(context.TODO(), q,
 				id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
-				return fmt.Errorf("adding record: %s", err)
+				return fmt.Errorf("adding record: %v", err)
 			}
 		}
 		// cksum
 		if len(mrecs) != 0 {
 			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
 			if _, err = tx.Exec(context.TODO(), q, id, cksum); err != nil {
-				return fmt.Errorf("adding cksum: %s", err)
+				return fmt.Errorf("adding cksum: %v", err)
 			}
 		}
 	}
@@ -197,15 +186,6 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		return fmt.Errorf("dropping addition table: %s", err)
 	}
 	return nil
-}
-
-func nullToPtr(n sql.NullString) *string {
-	if n.Valid {
-		return &n.String
-	} else {
-		s := ""
-		return &s
-	}
 }
 
 func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
@@ -242,12 +222,12 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	}
 	var connw *pgx.Conn
 	if connw, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
-		return err
+		return fmt.Errorf("opening connection for writing: %v", err)
 	}
 	defer connw.Close(context.TODO())
 	var tx pgx.Tx
 	if tx, err = util.BeginTx(context.TODO(), connw); err != nil {
-		return err
+		return fmt.Errorf("opening transaction: %v", err)
 	}
 	defer tx.Rollback(context.TODO())
 	// delete in finaltable
@@ -261,7 +241,7 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 		return fmt.Errorf("deleting cksum: %s", err)
 	}
 	if err = tx.Commit(context.TODO()); err != nil {
-		return err
+		return fmt.Errorf("committing updates: %v", err)
 	}
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.inc_delete"); err != nil {
 		return fmt.Errorf("dropping deletion table: %s", err)
@@ -281,14 +261,21 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on change table: %s", err)
 	}
-	var connw *pgx.Conn
-	if connw, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
-		return err
+	// connR is used for queries concurrent with reading rows.
+	var connR *pgx.Conn
+	if connR, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
+		return fmt.Errorf("opening connection for reading: %s", err)
 	}
-	defer connw.Close(context.TODO())
+	defer connR.Close(context.TODO())
+	// connW is used to write the changes.
+	var connW *pgx.Conn
+	if connW, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
+		return fmt.Errorf("opening connection for writing: %s", err)
+	}
+	defer connW.Close(context.TODO())
 	var tx pgx.Tx
-	if tx, err = util.BeginTx(context.TODO(), connw); err != nil {
-		return err
+	if tx, err = util.BeginTx(context.TODO(), connW); err != nil {
+		return fmt.Errorf("opening transaction: %s", err)
 	}
 	defer tx.Rollback(context.TODO())
 	// transform
@@ -299,25 +286,15 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var idN, matchedIDN, instanceHRIDN, stateN, dataN sql.NullString
+		var id, matchedID, instanceHRID, state, data *string
 		var cksum string
-		if err = rows.Scan(&idN, &matchedIDN, &instanceHRIDN, &stateN, &dataN, &cksum); err != nil {
-			return err
+		if err = rows.Scan(&id, &matchedID, &instanceHRID, &state, &data, &cksum); err != nil {
+			return fmt.Errorf("reading changes: %s", err)
 		}
-		// var inrec = reader.Record{
-		// 	Stop:         false,
-		// 	Err:          nil,
-		// 	ID:           idN,
-		// 	MatchedID:    matchedIDN,
-		// 	InstanceHRID: instanceHRIDN,
-		// 	State:        stateN,
-		// 	Data:         dataN,
-		// }
-		var id, matchedID, instanceHRID *string
 		var instanceID string
 		var mrecs []srs.Marc
 		var skip bool
-		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(nullToPtr(idN), nullToPtr(matchedIDN), nullToPtr(instanceHRIDN), nullToPtr(stateN), nullToPtr(dataN), printerr, verbose)
+		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(id, matchedID, instanceHRID, state, data, printerr, verbose)
 		if skip {
 			continue
 		}
@@ -325,11 +302,11 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 		var exist bool
 		var i int64
 		q = "SELECT 1 FROM " + tablefinal + " WHERE srs_id='" + *id + "' LIMIT 1"
-		err = dbc.Conn.QueryRow(context.TODO(), q).Scan(&i)
+		err = connR.QueryRow(context.TODO(), q).Scan(&i)
 		switch {
 		case err == pgx.ErrNoRows:
 		case err != nil:
-			return err
+			return fmt.Errorf("checking for existing rows: %s", err)
 		default:
 			exist = true
 		}
@@ -352,7 +329,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 			}
 		}
 		if verbose && exist && len(mrecs) == 0 {
-			printerr("removing: id=%s", id)
+			printerr("removing: id=%s", *id)
 		}
 		// cksum
 		if len(mrecs) != 0 {

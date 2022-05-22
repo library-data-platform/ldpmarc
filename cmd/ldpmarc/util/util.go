@@ -51,7 +51,7 @@ func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(s
 		return nil, nil, nil, "", nil, true
 	}
 	if verbose && len(mrecs) != 0 {
-		printerr("updating: id=%s", id)
+		printerr("updating: id=%s", *id)
 	}
 	return id, matchedID, instanceHRID, instanceID, mrecs, false
 }
