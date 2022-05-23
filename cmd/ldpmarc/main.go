@@ -327,7 +327,7 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 					return 0, fmt.Errorf("writing record: %v: %v", err, record)
 				}
 				if msg != nil {
-					printerr("skipping record: %s: %s", *id, *msg)
+					printerr("skipping line in record: %s: %s", *id, *msg)
 					continue
 				}
 				writeCount++
