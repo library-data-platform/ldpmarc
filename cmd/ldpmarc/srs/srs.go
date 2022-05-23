@@ -29,16 +29,16 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	// mrecs is the slice of Marc structs that will contain the transformed
 	// rows.
 	mrecs := make([]Marc, 0)
-	// Convert the JSON object into a map[string]interface{} which will be
+	// Convert the JSON object into a map[string]any which will be
 	// used to extract all of the required data from the MARC record.
 	var err error
-	var i interface{}
+	var i any
 	if err = json.Unmarshal([]byte(*marcjson), &i); err != nil {
 		return nil, "", err
 	}
 	var ok bool
-	var m map[string]interface{}
-	if m, ok = i.(map[string]interface{}); !ok {
+	var m map[string]any
+	if m, ok = i.(map[string]any); !ok {
 		return nil, "", fmt.Errorf("parsing error")
 	}
 	// Extract the leader.
@@ -50,8 +50,8 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	if i, ok = m["fields"]; !ok {
 		return nil, "", fmt.Errorf("parsing: \"fields\" not found")
 	}
-	var a []interface{}
-	if a, ok = i.([]interface{}); !ok {
+	var a []any
+	if a, ok = i.([]any); !ok {
 		return nil, "", fmt.Errorf("parsing: \"fields\" is not an array")
 	}
 	// Each element of the fields array is an object (map) with a MARC tag
@@ -59,11 +59,11 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	var line int64 = 1
 	var fieldCounts = make(map[string]int64)
 	for _, i = range a {
-		if m, ok = i.(map[string]interface{}); !ok {
+		if m, ok = i.(map[string]any); !ok {
 			return nil, "", fmt.Errorf("parsing: \"fields\" element is not an object")
 		}
 		var t string
-		var ii interface{}
+		var ii any
 		for t, ii = range m {
 			var fieldC int64 = fieldCounts[t] + 1
 			fieldCounts[t] = fieldC
@@ -95,7 +95,7 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 					Content: v,
 				})
 				line++
-			case map[string]interface{}:
+			case map[string]any:
 				// An object (map) needs further processing.
 				// We call transformSubfields which will output
 				// one or more rows to mrecs.
@@ -117,9 +117,9 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	return mrecs, instanceID, nil
 }
 
-func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm map[string]interface{}) error {
+func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm map[string]any) error {
 	var ok bool
-	var i interface{}
+	var i any
 	// Ind1
 	if i, ok = sm["ind1"]; !ok {
 		return fmt.Errorf("\"ind1\" not found")
@@ -140,17 +140,17 @@ func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm 
 	if i, ok = sm["subfields"]; !ok {
 		return fmt.Errorf("\"subfields\" not found")
 	}
-	var a []interface{}
-	if a, ok = i.([]interface{}); !ok {
+	var a []any
+	if a, ok = i.([]any); !ok {
 		return fmt.Errorf("\"subfields\" is not an array")
 	}
 	for _, i = range a {
-		var m map[string]interface{}
-		if m, ok = i.(map[string]interface{}); !ok {
+		var m map[string]any
+		if m, ok = i.(map[string]any); !ok {
 			return fmt.Errorf("\"subfields\" element is not an object")
 		}
 		var k string
-		var v interface{}
+		var v any
 		for k, v = range m {
 			var vs string
 			if vs, ok = v.(string); !ok {
@@ -172,8 +172,8 @@ func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm 
 	return nil
 }
 
-func getLeader(m map[string]interface{}) (string, error) {
-	var i interface{}
+func getLeader(m map[string]any) (string, error) {
+	var i any
 	var ok bool
 	if i, ok = m["leader"]; !ok {
 		return "", fmt.Errorf("\"leader\" not found")

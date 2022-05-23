@@ -92,7 +92,7 @@ func VacuumCksum(dbc *util.DBC) error {
 	return nil
 }
 
-func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
 	var err error
 	// add new data
 	if err = updateNew(dbc, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
@@ -117,7 +117,7 @@ func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	return nil
 }
 
-func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
 	var err error
 	// find new data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_add")
@@ -188,7 +188,7 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	return nil
 }
 
-func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...any), verbose bool) error {
 	var err error
 	// find deleted data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_delete")
@@ -249,7 +249,7 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	return nil
 }
 
-func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...interface{}), verbose bool) error {
+func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
 	var err error
 	// find changed data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_change")

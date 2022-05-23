@@ -164,7 +164,7 @@ func (s *Source) Next() bool {
 	}
 }
 
-func (s *Source) Values() ([]interface{}, error) {
+func (s *Source) Values() ([]any, error) {
 	var err error
 	switch {
 	case s.err != nil:
@@ -184,7 +184,7 @@ func (s *Source) Values() ([]interface{}, error) {
 		if instanceID, err = encodeUUID(r.SRSID); err != nil {
 			return nil, fmt.Errorf("encoding instance_id: %v", err)
 		}
-		var v = []interface{}{
+		var v = []any{
 			srsID,
 			r.Line,
 			matchedID,

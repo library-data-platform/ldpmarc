@@ -454,6 +454,6 @@ func grant(dbc *util.DBC, user string) error {
 	return nil
 }
 
-func printerr(format string, v ...interface{}) {
+func printerr(format string, v ...any) {
 	_, _ = fmt.Fprintf(os.Stderr, "%s: %s\n", program, fmt.Sprintf(format, v...))
 }
