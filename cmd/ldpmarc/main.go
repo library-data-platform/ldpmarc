@@ -288,6 +288,7 @@ func selectCount(dbc *util.DBC, tablein string) (int64, error) {
 
 func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 	var err error
+	var msg *string
 	var writeCount int64
 	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + *srsMarcAttrFlag + " FROM " + *srsRecordsFlag + " r JOIN " + *srsMarcFlag + " m ON r.id = m.id"
 	var rows pgx.Rows
@@ -321,13 +322,19 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 				record.Ord = m.Ord
 				record.SF = m.SF
 				record.Content = m.Content
-				if err = store.Write(&record); err != nil {
+				msg, err = store.Write(&record)
+				if err != nil {
 					return 0, fmt.Errorf("writing record: %v: %v", err, record)
 				}
+				if msg != nil {
+					printerr("skipping record: %s: %s", *id, *msg)
+					continue
+				}
+				writeCount++
 			} else {
 				_, _ = fmt.Fprintf(csvFile, "%q,%d,%q,%q,%q,%q,%q,%q,%d,%q,%q\n", *id, m.Line, *matchedID, *instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content)
+				writeCount++
 			}
-			writeCount++
 		}
 	}
 	if rows.Err() != nil {

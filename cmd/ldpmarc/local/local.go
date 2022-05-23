@@ -69,17 +69,18 @@ func NewStore(datadir string) (*Store, error) {
 	}, nil
 }
 
-func (s *Store) Write(record *Record) error {
+func (s *Store) Write(record *Record) (*string, error) {
 	var ok bool
 	var b *bin
 	if b, ok = s.bins[record.Field]; !ok {
-		return fmt.Errorf("unknown field: %v", record.Field)
+		var msg = fmt.Sprintf("unknown field: %s", record.Field)
+		return &msg, nil
 	}
 	var err error
 	if err = b.encoder.Encode(*record); err != nil {
-		return fmt.Errorf("encoding record: %v: %v", err, *record)
+		return nil, fmt.Errorf("encoding record: %v: %v", err, *record)
 	}
-	return nil
+	return nil, nil
 }
 
 func (s *Store) FinishWriting() error {
