@@ -122,39 +122,39 @@ func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm 
 	var i interface{}
 	// Ind1
 	if i, ok = sm["ind1"]; !ok {
-		return fmt.Errorf("parsing: \"ind1\" not found")
+		return fmt.Errorf("\"ind1\" not found")
 	}
 	var ind1 string
 	if ind1, ok = i.(string); !ok {
-		return fmt.Errorf("parsing: \"ind1\" wrong type")
+		return fmt.Errorf("\"ind1\" wrong type")
 	}
 	// Ind2
 	if i, ok = sm["ind2"]; !ok {
-		return fmt.Errorf("parsing: \"ind2\" not found")
+		return fmt.Errorf("\"ind2\" not found")
 	}
 	var ind2 string
 	if ind2, ok = i.(string); !ok {
-		return fmt.Errorf("parsing: \"ind2\" wrong type")
+		return fmt.Errorf("\"ind2\" wrong type")
 	}
 	// Subfields
 	if i, ok = sm["subfields"]; !ok {
-		return fmt.Errorf("parsing: \"subfields\" not found")
+		return fmt.Errorf("\"subfields\" not found")
 	}
 	var a []interface{}
 	if a, ok = i.([]interface{}); !ok {
-		return fmt.Errorf("parsing: \"subfields\" is not an array")
+		return fmt.Errorf("\"subfields\" is not an array")
 	}
 	for _, i = range a {
 		var m map[string]interface{}
 		if m, ok = i.(map[string]interface{}); !ok {
-			return fmt.Errorf("parsing: \"subfields\" element is not an object")
+			return fmt.Errorf("\"subfields\" element is not an object")
 		}
 		var k string
 		var v interface{}
 		for k, v = range m {
 			var vs string
 			if vs, ok = v.(string); !ok {
-				return fmt.Errorf("parsing: subfield value is not a string")
+				return fmt.Errorf("subfield value is not a string")
 			}
 			*mrecs = append(*mrecs, Marc{
 				Line:    *line,
