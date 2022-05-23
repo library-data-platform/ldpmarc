@@ -30,8 +30,8 @@ var srsMarcFlag = flag.String("m", "public.srs_marc", "Name of table containing 
 var srsMarcAttrFlag = flag.String("j", "data", "Name of column containing MARC JSON data")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
-var tableoutSchema = "ldpmarc"
-var tableoutTable = "_srs_marctab"
+var tableoutSchema = "marctab"
+var tableoutTable = "_mt"
 var tableout = tableoutSchema + "." + tableoutTable
 var tablefinalSchema = "public"
 var tablefinalTable = "srs_marctab"
@@ -92,6 +92,9 @@ func run() error {
 		return err
 	}
 	defer dbc.Conn.Close(context.TODO())
+	if err = setupSchema(dbc); err != nil {
+		return fmt.Errorf("setting up schema: %v", err)
+	}
 	var incUpdateAvail bool
 	if incUpdateAvail, err = inc.IncUpdateAvail(dbc); err != nil {
 		return err
@@ -117,7 +120,7 @@ func run() error {
 				if err == nil {
 					_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
 					for _, field := range allFields {
-						_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
+						_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
 					}
 					conn.Close(context.TODO())
 				}
@@ -139,18 +142,13 @@ func run() error {
 	return nil
 }
 
-func setupSchema(connstr string) error {
+func setupSchema(dbc *util.DBC) error {
 	var err error
-	var conn *pgx.Conn
-	if conn, err = pgx.Connect(context.TODO(), connstr); err != nil {
-		return err
-	}
-	defer conn.Close(context.TODO())
-	if _, err = conn.Exec(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
 	var q = "COMMENT ON SCHEMA " + tableoutSchema + " IS 'system tables for SRS MARC transform'"
-	if _, err = conn.Exec(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("adding comment on schema: %s", err)
 	}
 	return nil
@@ -264,13 +262,17 @@ func setupTables(dbc *util.DBC) error {
 		return fmt.Errorf("adding comment on table: %s", err)
 	}
 	for _, field := range allFields {
-		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+"_"+field)
-		q = "CREATE TABLE " + tableout + "_" + field +
+		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.srs_marctab_"+field)
+		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
+		q = "CREATE TABLE " + tableout + field +
 			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "');"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
 	}
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.cksum")
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.metadata")
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP SCHEMA IF EXISTS ldpmarc")
 	return nil
 }
 
@@ -345,7 +347,7 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 			return 0, err
 		}
 		_, err = dbc.Conn.CopyFrom(context.TODO(),
-			pgx.Identifier{tableoutSchema, tableoutTable + "_" + f},
+			pgx.Identifier{tableoutSchema, tableoutTable + f},
 			[]string{"srs_id", "line", "matched_id", "instance_hrid", "instance_id", "field", "ind1", "ind2", "ord", "sf", "content"},
 			src)
 		if err != nil {
@@ -419,11 +421,11 @@ func replace(dbc *util.DBC) error {
 		return fmt.Errorf("moving table: %s", err)
 	}
 	for _, field := range allFields {
-		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + "_" + field + ";"
+		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + field + ";"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("dropping table: %s", err)
 		}
-		q = "ALTER TABLE " + tableout + "_" + field + " RENAME TO " + tablefinalTable + "_" + field + ";"
+		q = "ALTER TABLE " + tableout + field + " RENAME TO mt" + field + ";"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("renaming table: %s", err)
 		}
