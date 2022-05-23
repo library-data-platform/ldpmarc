@@ -236,6 +236,9 @@ func setupTables(dbc *util.DBC) error {
 	var err error
 	var q string
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+	if !*noTrigramIndexFlag && !util.IsTrgmAvailable(dbc) {
+		return fmt.Errorf("unable to access pg_trgm module extension")
+	}
 	var lz4 string
 	if util.IsLZ4Available(dbc) {
 		lz4 = " COMPRESSION lz4"
@@ -389,14 +392,14 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 		if c == "content" {
 			if !*noTrigramIndexFlag {
 				printerr("creating index: %s", c)
-				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops);"
+				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 				}
 			}
 		} else {
 			printerr("creating index: %s", c)
-			var q = "CREATE INDEX ON " + tableout + " (" + c + ");"
+			var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
 			if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 				return fmt.Errorf("creating index: %s: %s", c, err)
 			}
@@ -407,32 +410,32 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 
 func replace(dbc *util.DBC) error {
 	var err error
-	var q = "DROP TABLE IF EXISTS folio_source_record.__marc;"
+	var q = "DROP TABLE IF EXISTS folio_source_record.__marc"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
-	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + ";"
+	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
-	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable + ";"
+	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("renaming table: %s", err)
 	}
-	q = "DROP TABLE IF EXISTS " + tablefinal + ";"
+	q = "DROP TABLE IF EXISTS " + tablefinal
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
-	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema + ";"
+	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("moving table: %s", err)
 	}
 	for _, field := range allFields {
-		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + field + ";"
+		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + field
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("dropping table: %s", err)
 		}
-		q = "ALTER TABLE " + tableout + field + " RENAME TO mt" + field + ";"
+		q = "ALTER TABLE " + tableout + field + " RENAME TO mt" + field
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("renaming table: %s", err)
 		}
@@ -443,11 +446,11 @@ func replace(dbc *util.DBC) error {
 func grant(dbc *util.DBC, user string) error {
 	var err error
 	// Grant permission to LDP user
-	var q = "GRANT USAGE ON SCHEMA " + tablefinalSchema + " TO " + user + ";"
+	var q = "GRANT USAGE ON SCHEMA " + tablefinalSchema + " TO " + user
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("schema permission: %s", err)
 	}
-	q = "GRANT SELECT ON " + tablefinal + " TO " + user + ";"
+	q = "GRANT SELECT ON " + tablefinal + " TO " + user
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("table permission: %s", err)
 	}

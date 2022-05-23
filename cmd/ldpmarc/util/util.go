@@ -93,6 +93,17 @@ func GetAllFieldNames() []string {
 	return s
 }
 
+func IsTrgmAvailable(dbc *DBC) bool {
+	if _, err := dbc.Conn.Exec(context.TODO(), "CREATE TEMP TABLE trgmtest (v varchar(1))"); err != nil {
+		return false
+	}
+	if _, err := dbc.Conn.Exec(context.TODO(), "CREATE INDEX ON trgmtest USING GIN (v gin_trgm_ops)"); err != nil {
+		return false
+	}
+	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE trgmtest")
+	return true
+}
+
 func IsLZ4Available(dbc *DBC) bool {
 	if _, err := dbc.Conn.Exec(context.TODO(), "CREATE TEMP TABLE lz4test (v varchar(1) COMPRESSION lz4)"); err != nil {
 		return false
