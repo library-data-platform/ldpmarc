@@ -22,8 +22,8 @@ System requirements
 ### Software
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 13.6 or later
-  * PostgreSQL 14.2 or later is recommended
+* [PostgreSQL](https://www.postgresql.org/) 13.7 or later
+  * PostgreSQL 14.3 or later is recommended
   * AWS RDS PostgreSQL is supported; Aurora is not supported
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
