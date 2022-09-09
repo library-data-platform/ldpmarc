@@ -114,14 +114,15 @@ func (s *Store) Close() {
 }
 
 type Source struct {
-	err     error
-	record  *Record
-	decoder *gob.Decoder
-	file    *os.File
-	path    string
+	err      error
+	record   *Record
+	decoder  *gob.Decoder
+	file     *os.File
+	path     string
+	printerr func(string, ...any)
 }
 
-func (s *Store) ReadSource(field string) (*Source, error) {
+func (s *Store) ReadSource(field string, printerr func(string, ...any)) (*Source, error) {
 	if !s.doneWriting {
 		return nil, fmt.Errorf("source cannot be created in write mode")
 	}
@@ -136,9 +137,10 @@ func (s *Store) ReadSource(field string) (*Source, error) {
 		return nil, fmt.Errorf("unable to open file for reading: %v: %v", b.path, err)
 	}
 	return &Source{
-		decoder: gob.NewDecoder(file),
-		file:    file,
-		path:    b.path,
+		decoder:  gob.NewDecoder(file),
+		file:     file,
+		path:     b.path,
+		printerr: printerr,
 	}, nil
 }
 
@@ -182,7 +184,11 @@ func (s *Source) Values() ([]any, error) {
 			return nil, fmt.Errorf("encoding matched_id: %v", err)
 		}
 		if instanceID, err = encodeUUID(r.InstanceID); err != nil {
-			return nil, fmt.Errorf("encoding instance_id: %v", err)
+			s.printerr("id=%s: encoding instance_id %q: %v", r.SRSID, r.InstanceID, err)
+			instanceID, err = encodeUUID("00000000-0000-0000-0000-000000000000")
+			if err != nil {
+				panic("error encoding UUID 00000000-0000-0000-0000-000000000000")
+			}
 		}
 		var v = []any{
 			srsID,
