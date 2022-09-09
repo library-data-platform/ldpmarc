@@ -352,7 +352,7 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 	var allFields = util.GetAllFieldNames()
 	var f string
 	for _, f = range allFields {
-		src, err := store.ReadSource(f)
+		src, err := store.ReadSource(f, printerr)
 		if err != nil {
 			return 0, err
 		}
