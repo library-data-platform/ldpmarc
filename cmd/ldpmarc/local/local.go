@@ -178,10 +178,10 @@ func (s *Source) Values() ([]any, error) {
 		if srsID, err = encodeUUID(r.SRSID); err != nil {
 			return nil, fmt.Errorf("encoding srs_id: %v", err)
 		}
-		if matchedID, err = encodeUUID(r.SRSID); err != nil {
+		if matchedID, err = encodeUUID(r.MatchedID); err != nil {
 			return nil, fmt.Errorf("encoding matched_id: %v", err)
 		}
-		if instanceID, err = encodeUUID(r.SRSID); err != nil {
+		if instanceID, err = encodeUUID(r.InstanceID); err != nil {
 			return nil, fmt.Errorf("encoding instance_id: %v", err)
 		}
 		var v = []any{
