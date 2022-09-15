@@ -159,6 +159,10 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		if skip {
 			continue
 		}
+		if _, err = util.EncodeUUID(instanceID); err != nil {
+			printerr("id=%s: encoding instance_id %q: %v", id, instanceID, err)
+			instanceID = util.NilUUID
+		}
 		var m srs.Marc
 		for _, m = range mrecs {
 			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
@@ -297,6 +301,10 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 		id, matchedID, instanceHRID, instanceID, mrecs, skip = util.Transform(id, matchedID, instanceHRID, state, data, printerr, verbose)
 		if skip {
 			continue
+		}
+		if _, err = util.EncodeUUID(instanceID); err != nil {
+			printerr("id=%s: encoding instance_id %q: %v", id, instanceID, err)
+			instanceID = util.NilUUID
 		}
 		// check if there are existing rows in tablefinal
 		var exist bool

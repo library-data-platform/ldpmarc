@@ -177,18 +177,15 @@ func (s *Source) Values() ([]any, error) {
 	default:
 		var r = s.record
 		var srsID, matchedID, instanceID pgtype.UUID
-		if srsID, err = encodeUUID(r.SRSID); err != nil {
+		if srsID, err = util.EncodeUUID(r.SRSID); err != nil {
 			return nil, fmt.Errorf("encoding srs_id: %v", err)
 		}
-		if matchedID, err = encodeUUID(r.MatchedID); err != nil {
+		if matchedID, err = util.EncodeUUID(r.MatchedID); err != nil {
 			return nil, fmt.Errorf("encoding matched_id: %v", err)
 		}
-		if instanceID, err = encodeUUID(r.InstanceID); err != nil {
+		if instanceID, err = util.EncodeUUID(r.InstanceID); err != nil {
 			s.printerr("id=%s: encoding instance_id %q: %v", r.SRSID, r.InstanceID, err)
-			instanceID, err = encodeUUID("00000000-0000-0000-0000-000000000000")
-			if err != nil {
-				panic("error encoding UUID 00000000-0000-0000-0000-000000000000")
-			}
+			instanceID = util.EncodeNilUUID()
 		}
 		var v = []any{
 			srsID,
@@ -209,13 +206,4 @@ func (s *Source) Values() ([]any, error) {
 
 func (s *Source) Err() error {
 	return s.err
-}
-
-func encodeUUID(uuid string) (pgtype.UUID, error) {
-	var err error
-	var u pgtype.UUID
-	if err = u.Set(uuid); err != nil {
-		return pgtype.UUID{}, err
-	}
-	return u, nil
 }
