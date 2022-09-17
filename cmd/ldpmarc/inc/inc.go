@@ -160,7 +160,7 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 			continue
 		}
 		if _, err = util.EncodeUUID(instanceID); err != nil {
-			printerr("id=%s: encoding instance_id %q: %v", id, instanceID, err)
+			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
 			instanceID = util.NilUUID
 		}
 		var m srs.Marc
@@ -303,7 +303,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 			continue
 		}
 		if _, err = util.EncodeUUID(instanceID); err != nil {
-			printerr("id=%s: encoding instance_id %q: %v", id, instanceID, err)
+			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
 			instanceID = util.NilUUID
 		}
 		// check if there are existing rows in tablefinal
