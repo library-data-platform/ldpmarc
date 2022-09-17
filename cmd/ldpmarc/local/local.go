@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgtype"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
 
 type Record struct {
@@ -177,15 +178,15 @@ func (s *Source) Values() ([]any, error) {
 	default:
 		var r = s.record
 		var srsID, matchedID, instanceID pgtype.UUID
-		if srsID, err = util.EncodeUUID(r.SRSID); err != nil {
+		if srsID, err = uuid.EncodeUUID(r.SRSID); err != nil {
 			return nil, fmt.Errorf("encoding srs_id: %v", err)
 		}
-		if matchedID, err = util.EncodeUUID(r.MatchedID); err != nil {
+		if matchedID, err = uuid.EncodeUUID(r.MatchedID); err != nil {
 			return nil, fmt.Errorf("encoding matched_id: %v", err)
 		}
-		if instanceID, err = util.EncodeUUID(r.InstanceID); err != nil {
+		if instanceID, err = uuid.EncodeUUID(r.InstanceID); err != nil {
 			s.printerr("id=%s: encoding instance_id %q: %v", r.SRSID, r.InstanceID, err)
-			instanceID = util.EncodeNilUUID()
+			instanceID = uuid.EncodeNilUUID()
 		}
 		var v = []any{
 			srsID,
