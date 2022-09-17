@@ -5,6 +5,8 @@ package srs
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
 
 // Marc is a single "row" of data extracted from part of a MARC record.
@@ -112,7 +114,7 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	var instanceID string = getInstanceID(mrecs)
 	// If the MARC record is not current, return nothing.
 	if !isCurrent(state, instanceID) {
-		return []Marc{}, "", nil
+		return []Marc{}, uuid.NilUUID, nil
 	}
 	return mrecs, instanceID, nil
 }
