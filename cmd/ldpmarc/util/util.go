@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 )
@@ -125,23 +124,4 @@ func BeginTx(ctx context.Context, conn *pgx.Conn) (pgx.Tx, error) {
 type DBC struct {
 	Conn       *pgx.Conn
 	ConnString string
-}
-
-const NilUUID string = "00000000-0000-0000-0000-000000000000"
-
-func EncodeNilUUID() pgtype.UUID {
-	u, err := EncodeUUID(NilUUID)
-	if err != nil {
-		panic("error encoding nil UUID")
-	}
-	return u
-}
-
-func EncodeUUID(uuid string) (pgtype.UUID, error) {
-	var u pgtype.UUID
-	err := u.Set(uuid)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return u, nil
 }

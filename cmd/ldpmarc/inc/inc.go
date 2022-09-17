@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
+	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
 
 const schemaVersion int64 = 11
@@ -159,9 +160,9 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		if skip {
 			continue
 		}
-		if _, err = util.EncodeUUID(instanceID); err != nil {
+		if _, err = uuid.EncodeUUID(instanceID); err != nil {
 			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
-			instanceID = util.NilUUID
+			instanceID = uuid.NilUUID
 		}
 		var m srs.Marc
 		for _, m = range mrecs {
@@ -302,9 +303,9 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 		if skip {
 			continue
 		}
-		if _, err = util.EncodeUUID(instanceID); err != nil {
+		if _, err = uuid.EncodeUUID(instanceID); err != nil {
 			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
-			instanceID = util.NilUUID
+			instanceID = uuid.NilUUID
 		}
 		// check if there are existing rows in tablefinal
 		var exist bool
