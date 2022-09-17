@@ -12,7 +12,7 @@ import (
 
 func MD5(srsMarcAttr string) string {
 	//return "md5(r::text || m::text)"
-	return "md5(coalesce(r.external_hrid::text, '') || coalesce(r.external_id::text, '') || coalesce(r.matched_id::text, '') || coalesce(r.state::text, '') || coalesce(m." + srsMarcAttr + "::text, ''))"
+	return "md5(coalesce(r.external_hrid::text, '') || coalesce(r.matched_id::text, '') || coalesce(r.state::text, '') || coalesce(m." + srsMarcAttr + "::text, ''))"
 }
 
 func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(string, ...interface{}), verbose bool) (*string, *string, *string, string, []srs.Marc, bool) {
