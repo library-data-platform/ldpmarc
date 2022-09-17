@@ -10,7 +10,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 )
 
-const schemaVersion int64 = 10
+const schemaVersion int64 = 11
 const cksumTable = "marctab.cksum"
 const metadataTableS = "marctab"
 const metadataTableT = "metadata"
