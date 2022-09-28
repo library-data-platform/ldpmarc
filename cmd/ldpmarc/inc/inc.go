@@ -11,7 +11,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
 
-const schemaVersion int64 = 11
+const schemaVersion int64 = 12
 const cksumTable = "marctab.cksum"
 const metadataTableS = "marctab"
 const metadataTableT = "metadata"
@@ -57,12 +57,13 @@ func CreateCksum(dbc *util.DBC, srsRecords, srsMarc, srsMarctab, srsMarcAttr str
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
+	// Filter should match srs.getInstanceID()
 	q = "CREATE TABLE " + cksumTable +
-		" AS SELECT r.id::uuid, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id JOIN " + srsMarctab + " mt ON r.id::uuid = mt.srs_id WHERE r.state = 'ACTUAL' AND mt.field = '999' AND mt.sf = 'i' AND mt.content <> '';"
+		" AS SELECT r.id::uuid, " + util.MD5(srsMarcAttr) + " cksum FROM " + srsRecords + " r JOIN " + srsMarc + " m ON r.id = m.id JOIN " + srsMarctab + " mt ON r.id::uuid = mt.srs_id WHERE r.state = 'ACTUAL' AND mt.field = '999' AND mt.sf = 'i' AND ind1 = 'f' AND ind2 = 'f' AND mt.content <> '';"
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
-	q = "CREATE INDEX ON " + cksumTable + " (id, cksum);"
+	q = "ALTER TABLE " + cksumTable + " ADD CONSTRAINT cksum_pkey PRIMARY KEY (id);"
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("indexing checksum table: %s", err)
 	}
