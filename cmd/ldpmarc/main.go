@@ -19,7 +19,7 @@ import (
 )
 
 var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremental update is available")
-var incUpdateFlag = flag.Bool("i", true, "Incremental update [deprecated]")
+var incUpdateFlag = flag.Bool("i", false, "[option no longer supported]")
 var datadirFlag = flag.String("D", "", "LDP data directory")
 var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
@@ -58,8 +58,11 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	var err error
-	if err = run(); err != nil {
+	if *incUpdateFlag {
+		printerr("-i option no longer supported")
+		os.Exit(1)
+	}
+	if err := run(); err != nil {
 		printerr("%s", err)
 		os.Exit(1)
 	}
@@ -99,7 +102,6 @@ func run() error {
 	if incUpdateAvail, err = inc.IncUpdateAvail(dbc); err != nil {
 		return err
 	}
-	_ = incUpdateFlag
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("incremental update")
 		if err = inc.IncUpdate(dbc, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
