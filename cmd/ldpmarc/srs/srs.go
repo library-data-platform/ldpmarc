@@ -110,8 +110,11 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 
 		}
 	}
-	// Extract the instance identifier from 999$i.
-	var instanceID string = getInstanceID(mrecs)
+	// Extract the instance identifier from 999$i (f f).
+	instanceID, err := getInstanceID(mrecs)
+	if err != nil {
+		return nil, "", fmt.Errorf("parsing: %v", err)
+	}
 	// If the MARC record is not current, return nothing.
 	if !isCurrent(state, instanceID) {
 		return []Marc{}, uuid.NilUUID, nil
@@ -187,14 +190,20 @@ func getLeader(m map[string]any) (string, error) {
 	return s, nil
 }
 
-func getInstanceID(mrecs []Marc) string {
-	var rec Marc
-	for _, rec = range mrecs {
-		if rec.Field == "999" && rec.Ind1 == "f" && rec.Ind2 == "f" && rec.SF == "i" && rec.Content != "" {
-			return rec.Content
+func getInstanceID(mrecs []Marc) (string, error) {
+	found := false
+	instanceID := ""
+	for _, r := range mrecs {
+		// Filter should match inc.CreateCksum
+		if r.Field == "999" && r.SF == "i" && r.Ind1 == "f" && r.Ind2 == "f" && r.Content != "" {
+			if found {
+				return "", fmt.Errorf("multiple values for 999$i (f f)")
+			}
+			found = true
+			instanceID = r.Content
 		}
 	}
-	return ""
+	return instanceID, nil
 }
 
 func isCurrent(state string, instanceID string) bool {

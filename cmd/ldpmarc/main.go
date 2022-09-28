@@ -114,7 +114,6 @@ func run() error {
 			for _ = range c {
 				_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
 				_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
-				var err error
 				var conn *pgx.Conn
 				conn, err = pgx.Connect(context.TODO(), dbc.ConnString)
 				if err == nil {
@@ -349,7 +348,6 @@ func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
 		return 0, err
 	}
 
-	var allFields = util.GetAllFieldNames()
 	var f string
 	for _, f = range allFields {
 		src, err := store.ReadSource(f, printerr)
