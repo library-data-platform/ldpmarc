@@ -16,6 +16,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 	"github.com/spf13/viper"
+	"gopkg.in/ini.v1"
 )
 
 var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremental update is available")
@@ -72,25 +73,19 @@ func main() {
 
 func run(loc *locations) error {
 	// Read database configuration
-	var ldpconf = filepath.Join(*datadirFlag, "ldpconf.json")
-	viper.SetConfigFile(ldpconf)
-	viper.SetConfigType("json")
+	var host, port, user, password, dbname, sslmode string
 	var err error
-	var ok bool
-	if err = viper.ReadInConfig(); err != nil {
-		if _, ok = err.(viper.ConfigFileNotFoundError); ok {
-			return fmt.Errorf("file not found: %s", ldpconf)
-		} else {
-			return fmt.Errorf("error reading file: %s: %s", ldpconf, err)
+	if *metadbFlag {
+		host, port, user, password, dbname, sslmode, err = readConfigMetadb()
+		if err != nil {
+			return err
+		}
+	} else {
+		host, port, user, password, dbname, sslmode, err = readConfigLDP1()
+		if err != nil {
+			return err
 		}
 	}
-	var ldp = "ldp_database"
-	var host = viper.GetString(ldp + ".database_host")
-	var port = strconv.Itoa(viper.GetInt(ldp + ".database_port"))
-	var user = viper.GetString(ldp + ".database_user")
-	var password = viper.GetString(ldp + ".database_password")
-	var dbname = viper.GetString(ldp + ".database_name")
-	var sslmode = viper.GetString(ldp + ".database_sslmode")
 	var dbc = new(util.DBC)
 	dbc.ConnString = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=" + sslmode
 	if dbc.Conn, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
@@ -486,6 +481,44 @@ type locations struct {
 	SrsRecords  string
 	SrsMarc     string
 	SrsMarcAttr string
+}
+
+func readConfigMetadb() (string, string, string, string, string, string, error) {
+	var mdbconf = filepath.Join(*datadirFlag, "metadb.conf")
+	cfg, err := ini.Load(mdbconf)
+	if err != nil {
+		return "", "", "", "", "", "", nil
+	}
+	s := cfg.Section("postgresql")
+	host := s.Key("host").String()
+	port := s.Key("port").String()
+	user := s.Key("metadb_user").String()
+	password := s.Key("metadb_user").String()
+	dbname := s.Key("database_name").String()
+	sslmode := s.Key("sslmode").String()
+	return host, port, user, password, dbname, sslmode, nil
+}
+
+func readConfigLDP1() (string, string, string, string, string, string, error) {
+	var ldpconf = filepath.Join(*datadirFlag, "ldpconf.json")
+	viper.SetConfigFile(ldpconf)
+	viper.SetConfigType("json")
+	var ok bool
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok = err.(viper.ConfigFileNotFoundError); ok {
+			return "", "", "", "", "", "", fmt.Errorf("file not found: %s", ldpconf)
+		} else {
+			return "", "", "", "", "", "", fmt.Errorf("error reading file: %s: %s", ldpconf, err)
+		}
+	}
+	var ldp = "ldp_database"
+	var host = viper.GetString(ldp + ".database_host")
+	var port = strconv.Itoa(viper.GetInt(ldp + ".database_port"))
+	var user = viper.GetString(ldp + ".database_user")
+	var password = viper.GetString(ldp + ".database_password")
+	var dbname = viper.GetString(ldp + ".database_name")
+	var sslmode = viper.GetString(ldp + ".database_sslmode")
+	return host, port, user, password, dbname, sslmode, nil
 }
 
 func printerr(format string, v ...any) {
