@@ -25,9 +25,10 @@ var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
-var srsRecordsFlag = flag.String("r", "public.srs_records", "Name of table containing SRS records to read")
-var srsMarcFlag = flag.String("m", "public.srs_marc", "Name of table containing SRS MARC (JSON) data to read")
-var srsMarcAttrFlag = flag.String("j", "data", "Name of column containing MARC JSON data")
+var srsRecordsFlag = flag.String("r", "", "Name of table containing SRS records to read")
+var srsMarcFlag = flag.String("m", "", "Name of table containing SRS MARC (JSON) data to read")
+var srsMarcAttrFlag = flag.String("j", "", "Name of column containing MARC JSON data")
+var metadbFlag = flag.Bool("M", false, "Metadb compatibility")
 var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 
 var tableoutSchema = "marctab"
@@ -62,13 +63,14 @@ func main() {
 		printerr("-i option no longer supported")
 		os.Exit(1)
 	}
-	if err := run(); err != nil {
+	loc := setupLocations()
+	if err := run(loc); err != nil {
 		printerr("%s", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(loc *locations) error {
 	// Read database configuration
 	var ldpconf = filepath.Join(*datadirFlag, "ldpconf.json")
 	viper.SetConfigFile(ldpconf)
@@ -104,7 +106,7 @@ func run() error {
 	}
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("incremental update")
-		if err = inc.IncUpdate(dbc, *srsRecordsFlag, *srsMarcFlag, *srsMarcAttrFlag, tablefinal, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(dbc, loc.SrsRecords, loc.SrsMarc, loc.SrsMarcAttr, tablefinal, printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -129,7 +131,7 @@ func run() error {
 			}
 		}()
 		// Run full update
-		if err = fullUpdate(dbc); err != nil {
+		if err = fullUpdate(loc, dbc); err != nil {
 			var err2 error
 			var conn *pgx.Conn
 			conn, err2 = pgx.Connect(context.TODO(), dbc.ConnString)
@@ -155,7 +157,7 @@ func setupSchema(dbc *util.DBC) error {
 	return nil
 }
 
-func fullUpdate(dbc *util.DBC) error {
+func fullUpdate(loc *locations, dbc *util.DBC) error {
 	var err error
 	if *csvFilenameFlag != "" {
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
@@ -167,7 +169,7 @@ func fullUpdate(dbc *util.DBC) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	inputCount, err := process(dbc)
+	inputCount, err := process(loc, dbc)
 	if err != nil {
 		return err
 	}
@@ -190,7 +192,7 @@ func fullUpdate(dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			printerr("writing checksums")
-			if err = inc.CreateCksum(dbc, *srsRecordsFlag, *srsMarcFlag, tablefinal, *srsMarcAttrFlag); err != nil {
+			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, tablefinal, loc.SrsMarcAttr); err != nil {
 				return err
 			}
 		}
@@ -206,7 +208,7 @@ func fullUpdate(dbc *util.DBC) error {
 	return nil
 }
 
-func process(dbc *util.DBC) (int64, error) {
+func process(loc *locations, dbc *util.DBC) (int64, error) {
 	var err error
 	var store *local.Store
 	if store, err = local.NewStore(*datadirFlag); err != nil {
@@ -218,14 +220,14 @@ func process(dbc *util.DBC) (int64, error) {
 	}
 
 	var inputCount int64
-	if inputCount, err = selectCount(dbc, *srsRecordsFlag); err != nil {
+	if inputCount, err = selectCount(dbc, loc.SrsRecords); err != nil {
 		return 0, err
 	}
 	printerr("transforming %d input records", inputCount)
 	// main processing
 	var writeCount int64
 	if inputCount > 0 {
-		if writeCount, err = processAll(dbc, store); err != nil {
+		if writeCount, err = processAll(loc, dbc, store); err != nil {
 			return 0, err
 		}
 	}
@@ -290,11 +292,11 @@ func selectCount(dbc *util.DBC, tablein string) (int64, error) {
 	return count, nil
 }
 
-func processAll(dbc *util.DBC, store *local.Store) (int64, error) {
+func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error) {
 	var err error
 	var msg *string
 	var writeCount int64
-	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + *srsMarcAttrFlag + " FROM " + *srsRecordsFlag + " r JOIN " + *srsMarcFlag + " m ON r.id = m.id"
+	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + loc.SrsMarcAttr + " FROM " + loc.SrsRecords + " r JOIN " + loc.SrsMarc + " m ON r.id = m.id"
 	var rows pgx.Rows
 	if rows, err = dbc.Conn.Query(context.TODO(), q); err != nil {
 		return 0, fmt.Errorf("selecting marc records: %v", err)
@@ -455,6 +457,35 @@ func grant(dbc *util.DBC, user string) error {
 		return fmt.Errorf("table permission: %s", err)
 	}
 	return nil
+}
+
+func setupLocations() *locations {
+	loc := &locations{
+		SrsRecords:  "folio_source_record.records_lb",
+		SrsMarc:     "folio_source_record.marc_records_lb",
+		SrsMarcAttr: "content",
+	}
+	if !*metadbFlag { // LDP1
+		loc.SrsRecords = "public.srs_records"
+		loc.SrsMarc = "public.srs_marc"
+		loc.SrsMarcAttr = "data"
+	}
+	if *srsRecordsFlag != "" {
+		loc.SrsRecords = *srsRecordsFlag
+	}
+	if *srsMarcFlag != "" {
+		loc.SrsMarc = *srsMarcFlag
+	}
+	if *srsMarcAttrFlag != "" {
+		loc.SrsMarcAttr = *srsMarcAttrFlag
+	}
+	return loc
+}
+
+type locations struct {
+	SrsRecords  string
+	SrsMarc     string
+	SrsMarcAttr string
 }
 
 func printerr(format string, v ...any) {
