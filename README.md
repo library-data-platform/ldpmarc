@@ -7,8 +7,8 @@ This software is distributed under the terms of the Apache License,
 Version 2.0.  See the file [LICENSE](LICENSE) for more information.
 
 
-__The ldpmarc tool converts LDP SRS/MARC records from JSON to a 
-tabular format.__
+__The ldpmarc tool converts SRS/MARC records in LDP1, Metadb, or
+LDLite from JSON to a tabular format.__
 
 
 System requirements
@@ -27,9 +27,9 @@ System requirements
   * AWS RDS PostgreSQL is supported; Aurora is not supported
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
-  * [LDP](https://github.com/library-data-platform/ldp) 1.6.0 or later
+  * [LDP1](https://github.com/library-data-platform/ldp) 1.6.0 or later
+  * [Metadb](https://github.com/metadb-project/metadb) 0.12 or later
   * [LDLite](https://github.com/library-data-platform/ldlite)
-  * [Metadb](https://github.com/metadb-project/metadb) with [migration tables](https://github.com/folio-org/folio-analytics/tree/main/sql_migration)
 * Required to build from source:
   * [Go](https://golang.org/) 1.18 or later
 * Required to build and run via Docker:
@@ -60,7 +60,7 @@ enabled in the database by a superuser:
 CREATE EXTENSION pg_trgm WITH SCHEMA pg_catalog;
 ```
 
-Then grant the LDP administrator permission to use the extension,
+Then grant the LDP1 administrator permission to use the extension,
 e.g.:
 ```
 GRANT USAGE ON SCHEMA public TO ldpadmin;
@@ -107,23 +107,24 @@ The `build.sh` script creates a `bin/` subdirectory and builds the
 ```
 
 
-Running ldpmarc
----------------
+Running ldpmarc with LDP1
+-------------------------
 
 The most common usage is:
 
 ```
-ldpmarc -D <datadir> -u <ldp_user>
+ldpmarc -D <datadir> -u <ldp1_user>
 ```
 
-where `datadir` is an LDP data directory containing `ldpconf.json`,
-and `ldp_user` is the LDP user to be granted select privileges on the
-output table.
+where `datadir` is a LDP1 data directory containing `ldpconf.json`,
+and `ldp1_user` is a LDP1 user to be granted select privileges on the
+output table.  Note that at present ldpmarc only grants privileges for
+a single user.
 
 For example:
 
 ```
-ldpmarc -D ldp_data -u ldp
+ldpmarc -D ldp1_data -u ldp
 ```
 
 SRS MARC data are read from the database tables `public.srs_marc` and
@@ -135,6 +136,30 @@ The transformed output is written to the table `public.srs_marctab`.
 
 This process can take a long time to run and uses a lot of disk space
 in the database.
+
+
+Running ldpmarc with Metadb
+---------------------------
+
+The usage for Metadb is mostly the same as for LDP1.
+
+First ensure that the Metadb user has full permissions for the
+`public` schema, for example:
+
+```
+GRANT CREATE, USAGE ON SCHEMA public TO metadb;
+```
+
+Then when running ldpmarc, the `-M` option should be added to enable
+compatibility with Metadb, for example:
+
+
+```
+ldpmarc -D mdb_data -u ldpuser -M
+```
+
+When `-M` is used, `-D` specifies a Metadb data directory rather than
+a LDP1 data directory.
 
 
 Full vs. incremental update
@@ -183,11 +208,11 @@ docker build -t ldpmarc:[VERSION] .
 ```
 
 To run ldpmarc as a Docker container, omit the `-D` option and instead
-mount your local LDP data directory at `/var/lib/ldp` in the
+mount your local LDP1 data directory at `/var/lib/ldp` in the
 container:
 
 ```
-docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp_user>
+docker run --rm -v /my/local/data/dir:/var/lib/ldp ldpmarc:<tag> -u <ldp1_user>
 ```
 
 
