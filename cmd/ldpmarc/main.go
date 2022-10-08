@@ -493,7 +493,7 @@ func readConfigMetadb() (string, string, string, string, string, string, error) 
 	host := s.Key("host").String()
 	port := s.Key("port").String()
 	user := s.Key("metadb_user").String()
-	password := s.Key("metadb_user").String()
+	password := s.Key("metadb_password").String()
 	dbname := s.Key("database_name").String()
 	sslmode := s.Key("sslmode").String()
 	return host, port, user, password, dbname, sslmode, nil
