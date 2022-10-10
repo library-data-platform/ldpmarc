@@ -173,6 +173,8 @@ compatibility with Metadb, for example:
 ldpmarc -D ldpmarc_data -M
 ```
 
+The transformed output is written to the table `folio_source_record.marctab`.
+
 At present ldpmarc does not grant privileges to Metadb users.  A shell
 script can be used to do this, for example:
 

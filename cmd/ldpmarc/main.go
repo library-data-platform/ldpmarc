@@ -35,8 +35,8 @@ var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 var tableoutSchema = "marctab"
 var tableoutTable = "_mt"
 var tableout = tableoutSchema + "." + tableoutTable
-var tablefinalSchema = "public"
-var tablefinalTable = "srs_marctab"
+var tablefinalSchema = "folio_source_record"
+var tablefinalTable = "marctab"
 var tablefinal = tablefinalSchema + "." + tablefinalTable
 
 var allFields = util.GetAllFieldNames()
@@ -63,6 +63,10 @@ func main() {
 	if *incUpdateFlag {
 		printerr("-i option no longer supported")
 		os.Exit(1)
+	}
+	if !*metadbFlag { // LDP1
+		tablefinalSchema = "public"
+		tablefinalTable = "srs_marctab"
 	}
 	loc := setupLocations()
 	if err := run(loc); err != nil {
