@@ -28,7 +28,7 @@ System requirements
 * [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
   * [LDP1](https://github.com/library-data-platform/ldp) 1.6.0 or later
-  * [Metadb](https://github.com/metadb-project/metadb) 0.12 or later
+  * [Metadb](https://github.com/metadb-project/metadb) 0.11
   * [LDLite](https://github.com/library-data-platform/ldlite)
 * Required to build from source:
   * [Go](https://golang.org/) 1.18 or later
@@ -138,28 +138,50 @@ This process can take a long time to run and uses a lot of disk space
 in the database.
 
 
-Running ldpmarc with Metadb
----------------------------
+Running ldpmarc with Metadb 0.11
+--------------------------------
 
-The usage for Metadb is mostly the same as for LDP1.
+The usage for ldpmarc with Metadb 0.11 is similar to running it with
+LDP1, except for a few changes.
 
-First ensure that the Metadb user has full permissions for the
+First ensure that the Metadb admin user has full permissions for the
 `public` schema, for example:
 
 ```
-GRANT CREATE, USAGE ON SCHEMA public TO metadb;
+GRANT CREATE, USAGE ON SCHEMA public TO metadbadmin;
 ```
 
-Then when running ldpmarc, the `-M` option should be added to enable
+Then make a temporary data directory, for instance called
+`ldpmarc_data/`.  In that directory, create a file `metadb.conf`
+containing connection parameters for the Metadb database, in the form:
+
+```ini
+[main]
+host =
+port = 5432
+database =
+systemuser = metadbadmin
+systemuser_password =
+sslmode = require
+```
+
+When running ldpmarc, the `-M` option should be added to enable
 compatibility with Metadb, for example:
 
 
 ```
-ldpmarc -D mdb_data -u ldpuser -M
+ldpmarc -D ldpmarc_data -M
 ```
 
-When `-M` is used, `-D` specifies a Metadb data directory rather than
-a LDP1 data directory.
+At present ldpmarc does not grant privileges to Metadb users.  A shell
+script can be used to do this, for example:
+
+```
+users=/path/to/list/of/users.txt
+for u in $( cat $users ); do
+    psql -c "GRANT SELECT ON public.srs_marctab TO $u;"  (etc.)
+done
+```
 
 
 Full vs. incremental update

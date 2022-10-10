@@ -489,12 +489,12 @@ func readConfigMetadb() (string, string, string, string, string, string, error) 
 	if err != nil {
 		return "", "", "", "", "", "", nil
 	}
-	s := cfg.Section("postgresql")
+	s := cfg.Section("main")
 	host := s.Key("host").String()
 	port := s.Key("port").String()
-	user := s.Key("metadb_user").String()
-	password := s.Key("metadb_password").String()
-	dbname := s.Key("database_name").String()
+	user := s.Key("systemuser").String()
+	password := s.Key("systemuser_password").String()
+	dbname := s.Key("database").String()
 	sslmode := s.Key("sslmode").String()
 	return host, port, user, password, dbname, sslmode, nil
 }
