@@ -410,34 +410,42 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 }
 
 func replace(dbc *util.DBC) error {
-	var err error
-	var q = "DROP TABLE IF EXISTS folio_source_record.__marc"
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	// Transitional: clean up pre-Metadb table
+	q := "DROP TABLE IF EXISTS public.srs_marctab"
+	_, err := dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
+
 	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	_, err = dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	_, err = dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
 		return fmt.Errorf("renaming table: %s", err)
 	}
 	q = "DROP TABLE IF EXISTS " + tablefinal
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	_, err = dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	_, err = dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
 		return fmt.Errorf("moving table: %s", err)
 	}
 	for _, field := range allFields {
 		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + field
-		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+		_, err = dbc.Conn.Exec(context.TODO(), q)
+		if err != nil {
 			return fmt.Errorf("dropping table: %s", err)
 		}
 		q = "ALTER TABLE " + tableout + field + " RENAME TO mt" + field
-		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+		_, err = dbc.Conn.Exec(context.TODO(), q)
+		if err != nil {
 			return fmt.Errorf("renaming table: %s", err)
 		}
 	}
