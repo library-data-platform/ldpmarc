@@ -211,7 +211,7 @@ All ldpmarc data can be deleted from the database by dropping these
 tables:
 
 ```
-DROP TABLE IF EXISTS marctab._srs_marctab, marctab.cksum, marctab.metadata, public.srs_marctab;
+DROP TABLE IF EXISTS folio_source_record.marctab, marctab._srs_marctab, marctab.cksum, marctab.metadata, public.srs_marctab;
 ```
 
 This may be useful for uninstalling ldpmarc, or to restart it with a
