@@ -21,8 +21,8 @@ import (
 
 var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremental update is available")
 var incUpdateFlag = flag.Bool("i", false, "[option no longer supported]")
-var datadirFlag = flag.String("D", "", "LDP data directory")
-var ldpUserFlag = flag.String("u", "", "LDP user to be granted select privileges")
+var datadirFlag = flag.String("D", "", "Data directory")
+var ldpUserFlag = flag.String("u", "", "User to be granted select privileges")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
