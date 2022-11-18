@@ -138,39 +138,18 @@ This process can take a long time to run and uses a lot of disk space
 in the database.
 
 
-Running ldpmarc with Metadb 0.11
+Running ldpmarc with Metadb 0.12
 --------------------------------
 
-The usage for ldpmarc with Metadb 0.11 is similar to running it with
-LDP1, except for a few changes.
-
-First ensure that the Metadb admin user has full permissions for the
-`public` schema, for example:
-
-```
-GRANT CREATE, USAGE ON SCHEMA public TO metadbadmin;
-```
-
-Then make a temporary data directory, for instance called
-`ldpmarc_data/`.  In that directory, create a file `metadb.conf`
-containing connection parameters for the Metadb database, in the form:
-
-```ini
-[main]
-host =
-port = 5432
-database =
-systemuser = metadbadmin
-systemuser_password =
-sslmode = require
-```
+The usage for ldpmarc with Metadb 0.12 is similar to running it with
+LDP1.
 
 When running ldpmarc, the `-M` option should be added to enable
 compatibility with Metadb, for example:
 
 
 ```
-ldpmarc -D ldpmarc_data -M
+ldpmarc -D data -M
 ```
 
 The transformed output is written to the table `folio_source_record.marctab`.
@@ -181,7 +160,7 @@ script can be used to do this, for example:
 ```
 users=/path/to/list/of/users.txt
 for u in $( cat $users ); do
-    psql -c "GRANT SELECT ON public.srs_marctab TO $u;"  (etc.)
+    psql -c "GRANT SELECT ON folio_source_record.marctab TO $u ;"  (etc.)
 done
 ```
 
