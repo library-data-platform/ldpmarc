@@ -137,6 +137,16 @@ The transformed output is written to the table `public.srs_marctab`.
 This process can take a long time to run and uses a lot of disk space
 in the database.
 
+If individual user accounts are configured for LDP1, a shell script
+can be used to grant privileges to the users, for example:
+
+```
+users=/path/to/list/of/users.txt
+for u in $( cat $users ); do
+    psql -c "GRANT SELECT ON public.srs_marctab TO $u ;"  (etc.)
+done
+```
+
 
 Running ldpmarc with Metadb 0.12
 --------------------------------
@@ -154,8 +164,7 @@ ldpmarc -D data -M
 
 The transformed output is written to the table `folio_source_record.marctab`.
 
-At present ldpmarc does not grant privileges to Metadb users.  A shell
-script can be used to do this, for example:
+To grant privileges to Metadb users:
 
 ```
 users=/path/to/list/of/users.txt
