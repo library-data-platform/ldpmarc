@@ -35,9 +35,6 @@ var helpFlag = flag.Bool("h", false, "Help for ldpmarc")
 var tableoutSchema = "marctab"
 var tableoutTable = "_mt"
 var tableout = tableoutSchema + "." + tableoutTable
-var tablefinalSchema = "folio_source_record"
-var tablefinalTable = "marctab"
-var tablefinal = tablefinalSchema + "." + tablefinalTable
 
 var allFields = util.GetAllFieldNames()
 
@@ -63,10 +60,6 @@ func main() {
 	if *incUpdateFlag {
 		printerr("-i option no longer supported")
 		os.Exit(1)
-	}
-	if !*metadbFlag { // LDP1
-		tablefinalSchema = "public"
-		tablefinalTable = "srs_marctab"
 	}
 	loc := setupLocations()
 	if err := run(loc); err != nil {
@@ -105,7 +98,7 @@ func run(loc *locations) error {
 	}
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("incremental update")
-		if err = inc.IncUpdate(dbc, loc.SrsRecords, loc.SrsMarc, loc.SrsMarcAttr, tablefinal, printerr, *verboseFlag); err != nil {
+		if err = inc.IncUpdate(dbc, loc.SrsRecords, loc.SrsMarc, loc.SrsMarcAttr, loc.tablefinal(), printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
@@ -178,12 +171,12 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 			return err
 		}
 		// Replace table
-		if err = replace(dbc); err != nil {
+		if err = replace(loc, dbc); err != nil {
 			return err
 		}
 		// Grant permission to LDP user
 		if ldpUserFlag != nil && *ldpUserFlag != "" {
-			if err = grant(dbc, *ldpUserFlag); err != nil {
+			if err = grant(loc, dbc, *ldpUserFlag); err != nil {
 				return err
 			}
 		}
@@ -191,18 +184,18 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			printerr("writing checksums")
-			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, tablefinal, loc.SrsMarcAttr); err != nil {
+			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
 				return err
 			}
 		}
 		printerr("vacuuming")
-		if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
+		if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
 			return err
 		}
 		if err = inc.VacuumCksum(dbc); err != nil {
 			return err
 		}
-		printerr("new table is ready to use: " + tablefinal)
+		printerr("new table is ready to use: " + loc.tablefinal())
 	}
 	return nil
 }
@@ -409,7 +402,7 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 	return nil
 }
 
-func replace(dbc *util.DBC) error {
+func replace(loc *locations, dbc *util.DBC) error {
 	// Transitional: clean up pre-Metadb table
 	q := "DROP TABLE IF EXISTS public.srs_marctab"
 	_, err := dbc.Conn.Exec(context.TODO(), q)
@@ -417,28 +410,28 @@ func replace(dbc *util.DBC) error {
 		return fmt.Errorf("dropping table: %s", err)
 	}
 
-	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable
+	q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + loc.TablefinalTable
 	_, err = dbc.Conn.Exec(context.TODO(), q)
 	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
-	q = "ALTER TABLE " + tableout + " RENAME TO " + tablefinalTable
+	q = "ALTER TABLE " + tableout + " RENAME TO " + loc.TablefinalTable
 	_, err = dbc.Conn.Exec(context.TODO(), q)
 	if err != nil {
 		return fmt.Errorf("renaming table: %s", err)
 	}
-	q = "DROP TABLE IF EXISTS " + tablefinal
+	q = "DROP TABLE IF EXISTS " + loc.tablefinal()
 	_, err = dbc.Conn.Exec(context.TODO(), q)
 	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}
-	q = "ALTER TABLE " + tableoutSchema + "." + tablefinalTable + " SET SCHEMA " + tablefinalSchema
+	q = "ALTER TABLE " + tableoutSchema + "." + loc.TablefinalTable + " SET SCHEMA " + loc.TablefinalSchema
 	_, err = dbc.Conn.Exec(context.TODO(), q)
 	if err != nil {
 		return fmt.Errorf("moving table: %s", err)
 	}
 	for _, field := range allFields {
-		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + tablefinalTable + field
+		q = "DROP TABLE IF EXISTS " + tableoutSchema + "." + loc.TablefinalTable + field
 		_, err = dbc.Conn.Exec(context.TODO(), q)
 		if err != nil {
 			return fmt.Errorf("dropping table: %s", err)
@@ -452,14 +445,14 @@ func replace(dbc *util.DBC) error {
 	return nil
 }
 
-func grant(dbc *util.DBC, user string) error {
+func grant(loc *locations, dbc *util.DBC, user string) error {
 	var err error
 	// Grant permission to LDP user
-	var q = "GRANT USAGE ON SCHEMA " + tablefinalSchema + " TO " + user
+	var q = "GRANT USAGE ON SCHEMA " + loc.TablefinalSchema + " TO " + user
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("schema permission: %s", err)
 	}
-	q = "GRANT SELECT ON " + tablefinal + " TO " + user
+	q = "GRANT SELECT ON " + loc.tablefinal() + " TO " + user
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("table permission: %s", err)
 	}
@@ -468,14 +461,18 @@ func grant(dbc *util.DBC, user string) error {
 
 func setupLocations() *locations {
 	loc := &locations{
-		SrsRecords:  "folio_source_record.records_lb",
-		SrsMarc:     "folio_source_record.marc_records_lb",
-		SrsMarcAttr: "content",
+		SrsRecords:       "folio_source_record.records_lb",
+		SrsMarc:          "folio_source_record.marc_records_lb",
+		SrsMarcAttr:      "content",
+		TablefinalSchema: "folio_source_record",
+		TablefinalTable:  "marctab",
 	}
 	if !*metadbFlag { // LDP1
 		loc.SrsRecords = "public.srs_records"
 		loc.SrsMarc = "public.srs_marc"
 		loc.SrsMarcAttr = "data"
+		loc.TablefinalSchema = "public"
+		loc.TablefinalTable = "srs_marctab"
 	}
 	if *srsRecordsFlag != "" {
 		loc.SrsRecords = *srsRecordsFlag
@@ -490,9 +487,15 @@ func setupLocations() *locations {
 }
 
 type locations struct {
-	SrsRecords  string
-	SrsMarc     string
-	SrsMarcAttr string
+	SrsRecords       string
+	SrsMarc          string
+	SrsMarcAttr      string
+	TablefinalSchema string
+	TablefinalTable  string
+}
+
+func (l locations) tablefinal() string {
+	return l.TablefinalSchema + "." + l.TablefinalTable
 }
 
 func readConfigMetadb() (string, string, string, string, string, string, error) {
