@@ -25,6 +25,7 @@ var incUpdateFlag = flag.Bool("i", false, "[option no longer supported]")
 var datadirFlag = flag.String("D", "", "Data directory")
 var ldpUserFlag = flag.String("u", "", "User to be granted select privileges")
 var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
+var noIndexesFlag = flag.Bool("I", false, "Disable creation of all indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
 var srsRecordsFlag = flag.String("r", "", "Name of table containing SRS records to read")
@@ -380,11 +381,13 @@ func index(dbc *util.DBC) error {
 	if err = indexColumns(dbc, cols); err != nil {
 		return err
 	}
-	// Create unique index
-	printerr("creating index: srs_id, line, field")
-	var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
-		return fmt.Errorf("creating index: srs_id, line, field: %s", err)
+	if !*noIndexesFlag {
+		// Create unique index
+		printerr("creating index: srs_id, line, field")
+		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
+		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+			return fmt.Errorf("creating index: srs_id, line, field: %s", err)
+		}
 	}
 	return nil
 }
@@ -394,7 +397,7 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 	var c string
 	for _, c = range cols {
 		if c == "content" {
-			if !*noTrigramIndexFlag {
+			if !*noTrigramIndexFlag && !*noIndexesFlag {
 				printerr("creating index: %s", c)
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
@@ -402,10 +405,12 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 				}
 			}
 		} else {
-			printerr("creating index: %s", c)
-			var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
-			if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
-				return fmt.Errorf("creating index: %s: %s", c, err)
+			if !*noIndexesFlag {
+				printerr("creating index: %s", c)
+				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
+				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+					return fmt.Errorf("creating index: %s: %s", c, err)
+				}
 			}
 		}
 	}
