@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
@@ -285,6 +286,8 @@ func selectCount(dbc *util.DBC, tablein string) (int64, error) {
 }
 
 func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error) {
+	startTime := time.Now()
+
 	var err error
 	var msg *string
 	var writeCount int64
@@ -344,6 +347,11 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		return 0, err
 	}
 
+	printerr("transformed records [%.1f h]", time.Since(startTime).Hours())
+
+	printerr("loading data")
+	startTime = time.Now()
+
 	var f string
 	for _, f = range allFields {
 		src, err := store.ReadSource(f, printerr)
@@ -359,6 +367,8 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		}
 		src.Close()
 	}
+
+	printerr("completed loading [%.1f h]", time.Since(startTime).Hours())
 
 	return writeCount, nil
 }
