@@ -99,12 +99,12 @@ func run(loc *locations) error {
 		return err
 	}
 	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
-		printerr("incremental update")
+		printerr("starting incremental update")
 		if err = inc.IncUpdate(dbc, loc.SrsRecords, loc.SrsMarc, loc.SrsMarcAttr, loc.tablefinal(), printerr, *verboseFlag); err != nil {
 			return err
 		}
 	} else {
-		printerr("full update")
+		printerr("starting full update")
 		// Catch SIGTERM etc.
 		c := make(chan os.Signal, 2)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -152,6 +152,7 @@ func setupSchema(dbc *util.DBC) error {
 }
 
 func fullUpdate(loc *locations, dbc *util.DBC) error {
+	startUpdate := time.Now()
 	var err error
 	if *csvFilenameFlag != "" {
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
@@ -163,7 +164,7 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	inputCount, err := process(loc, dbc)
+	inputCount, writeCount, err := process(loc, dbc)
 	if err != nil {
 		return err
 	}
@@ -185,48 +186,50 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
-			printerr("writing checksums")
+			startCksum := time.Now()
 			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
 				return err
 			}
+			printerr(" %s checksum", elapsedTime(startCksum))
 		}
-		printerr("vacuuming")
+		startVacuum := time.Now()
 		if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
 			return err
 		}
+		printerr(" %s vacuum", elapsedTime(startVacuum))
 		if err = inc.VacuumCksum(dbc); err != nil {
 			return err
 		}
+		printerr("%s full update", elapsedTime(startUpdate))
+		printerr("%d output rows", writeCount)
 		printerr("new table is ready to use: " + loc.tablefinal())
 	}
 	return nil
 }
 
-func process(loc *locations, dbc *util.DBC) (int64, error) {
+func process(loc *locations, dbc *util.DBC) (int64, int64, error) {
 	var err error
 	var store *local.Store
 	if store, err = local.NewStore(*datadirFlag); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer store.Close()
 	if err = setupTables(dbc); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	var inputCount int64
+	var inputCount, writeCount int64
 	if inputCount, err = selectCount(dbc, loc.SrsRecords); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	printerr("transforming %d input records", inputCount)
+	printerr("%d input rows", inputCount)
 	// main processing
-	var writeCount int64
 	if inputCount > 0 {
 		if writeCount, err = processAll(loc, dbc, store); err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 	}
-	printerr("%d output rows", writeCount)
-	return inputCount, nil
+	return inputCount, writeCount, nil
 }
 
 func setupTables(dbc *util.DBC) error {
@@ -348,9 +351,8 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		return 0, err
 	}
 
-	printerr("transformed records [%.1f h]", time.Since(startTime).Hours())
+	printerr(" %s transform", elapsedTime(startTime))
 
-	printerr("loading data")
 	startTime = time.Now()
 
 	var f string
@@ -369,12 +371,13 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		src.Close()
 	}
 
-	printerr("completed loading [%.1f h]", time.Since(startTime).Hours())
+	printerr(" %s load", elapsedTime(startTime))
 
 	return writeCount, nil
 }
 
 func index(dbc *util.DBC) error {
+	startIndex := time.Now()
 	var err error
 	// Index columns
 	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
@@ -383,11 +386,13 @@ func index(dbc *util.DBC) error {
 	}
 	if !*noIndexesFlag {
 		// Create unique index
-		printerr("creating index: srs_id, line, field")
 		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 		}
+	}
+	if !*noIndexesFlag {
+		printerr(" %s index", elapsedTime(startIndex))
 	}
 	return nil
 }
@@ -398,7 +403,6 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 	for _, c = range cols {
 		if c == "content" {
 			if !*noTrigramIndexFlag && !*noIndexesFlag {
-				printerr("creating index: %s", c)
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
@@ -406,7 +410,6 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 			}
 		} else {
 			if !*noIndexesFlag {
-				printerr("creating index: %s", c)
 				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index: %s: %s", c, err)
@@ -549,6 +552,10 @@ func readConfigLDP1() (string, string, string, string, string, string, error) {
 	var dbname = viper.GetString(ldp + ".database_name")
 	var sslmode = viper.GetString(ldp + ".database_sslmode")
 	return host, port, user, password, dbname, sslmode, nil
+}
+
+func elapsedTime(start time.Time) string {
+	return fmt.Sprintf("[%.4f h]", time.Since(start).Hours())
 }
 
 func printerr(format string, v ...any) {
