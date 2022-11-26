@@ -1,6 +1,7 @@
 package local
 
 import (
+	"bufio"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ type Store struct {
 
 type bin struct {
 	encoder *gob.Encoder
+	writer  *bufio.Writer
 	file    *os.File
 	path    string
 }
@@ -58,8 +60,10 @@ func NewStore(datadir string) (*Store, error) {
 			}
 			return nil, fmt.Errorf("unable to create file: %v: %v", path, err)
 		}
+		w := bufio.NewWriter(file)
 		bins[f] = &bin{
-			encoder: gob.NewEncoder(file),
+			encoder: gob.NewEncoder(w),
+			writer:  w,
 			file:    file,
 			path:    path,
 		}
@@ -93,6 +97,9 @@ func (s *Store) FinishWriting() error {
 	var f string
 	var b *bin
 	for f, b = range s.bins {
+		if err = b.writer.Flush(); err != nil {
+			return fmt.Errorf("flushing buffer for file: %v: %v", b.path, err)
+		}
 		if err = b.file.Close(); err != nil {
 			return fmt.Errorf("closing file: %v: %v", b.path, err)
 		}
@@ -118,6 +125,7 @@ type Source struct {
 	err      error
 	record   *Record
 	decoder  *gob.Decoder
+	reader   *bufio.Reader
 	file     *os.File
 	path     string
 	printerr func(string, ...any)
@@ -137,8 +145,10 @@ func (s *Store) ReadSource(field string, printerr func(string, ...any)) (*Source
 	if file, err = os.Open(b.path); err != nil {
 		return nil, fmt.Errorf("unable to open file for reading: %v: %v", b.path, err)
 	}
+	r := bufio.NewReader(file)
 	return &Source{
-		decoder:  gob.NewDecoder(file),
+		decoder:  gob.NewDecoder(r),
+		reader:   r,
 		file:     file,
 		path:     b.path,
 		printerr: printerr,
