@@ -20,7 +20,8 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremental update is available")
+var fullUpdateFlag = flag.Bool("f", false, "Perform full update")
+var optimizedFullUpdateFlag = flag.Bool("F", false, "Perform full update and optimize storage for only full updates")
 var incUpdateFlag = flag.Bool("i", false, "[option no longer supported]")
 var datadirFlag = flag.String("D", "", "Data directory")
 var ldpUserFlag = flag.String("u", "", "User to be granted select privileges")
@@ -98,7 +99,7 @@ func run(loc *locations) error {
 	if incUpdateAvail, err = inc.IncUpdateAvail(dbc); err != nil {
 		return err
 	}
-	if incUpdateAvail && !*fullUpdateFlag && *csvFilenameFlag == "" {
+	if incUpdateAvail && !*fullUpdateFlag && !*optimizedFullUpdateFlag && *csvFilenameFlag == "" {
 		printerr("starting incremental update")
 		if err = inc.IncUpdate(dbc, loc.SrsRecords, loc.SrsMarc, loc.SrsMarcAttr, loc.tablefinal(), printerr, *verboseFlag); err != nil {
 			return err
@@ -153,8 +154,9 @@ func setupSchema(dbc *util.DBC) error {
 
 func fullUpdate(loc *locations, dbc *util.DBC) error {
 	startUpdate := time.Now()
-	var err error
+	fillfactor := fillfactorString(*optimizedFullUpdateFlag)
 	if *csvFilenameFlag != "" {
+		var err error
 		if csvFile, err = os.Create(*csvFilenameFlag); err != nil {
 			return err
 		}
@@ -164,13 +166,13 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	inputCount, writeCount, err := process(loc, dbc)
+	inputCount, writeCount, err := process(loc, dbc, fillfactor)
 	if err != nil {
 		return err
 	}
 	if *csvFilenameFlag == "" {
 		// Index columns
-		if err = index(dbc); err != nil {
+		if err = index(dbc, fillfactor); err != nil {
 			return err
 		}
 		// Replace table
@@ -187,7 +189,7 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
 		if inputCount > 0 {
 			startCksum := time.Now()
-			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
+			if err = inc.CreateCksum(dbc, fillfactor, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
 				return err
 			}
 			printerr(" %s checksum", util.ElapsedTime(startCksum))
@@ -207,14 +209,14 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 	return nil
 }
 
-func process(loc *locations, dbc *util.DBC) (int64, int64, error) {
+func process(loc *locations, dbc *util.DBC, fillfactor string) (int64, int64, error) {
 	var err error
 	var store *local.Store
 	if store, err = local.NewStore(*datadirFlag); err != nil {
 		return 0, 0, err
 	}
 	defer store.Close()
-	if err = setupTables(dbc); err != nil {
+	if err = setupTables(dbc, fillfactor); err != nil {
 		return 0, 0, err
 	}
 
@@ -232,7 +234,7 @@ func process(loc *locations, dbc *util.DBC) (int64, int64, error) {
 	return inputCount, writeCount, nil
 }
 
-func setupTables(dbc *util.DBC) error {
+func setupTables(dbc *util.DBC, fillfactor string) error {
 	var err error
 	var q string
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
@@ -256,7 +258,7 @@ func setupTables(dbc *util.DBC) error {
 		"    ord smallint NOT NULL," +
 		"    sf varchar(1) NOT NULL," +
 		"    content varchar(65535)" + lz4 + " NOT NULL" +
-		") PARTITION BY LIST (field);"
+		") PARTITION BY LIST (field)"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating table: %s", err)
 	}
@@ -268,8 +270,7 @@ func setupTables(dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.srs_marctab_"+field)
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
 		q = "CREATE TABLE " + tableout + field +
-			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "')" +
-			" WITH (fillfactor=90)"
+			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "')" + fillfactor
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
@@ -377,17 +378,17 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 	return writeCount, nil
 }
 
-func index(dbc *util.DBC) error {
+func index(dbc *util.DBC, fillfactor string) error {
 	startIndex := time.Now()
 	var err error
 	// Index columns
 	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
-	if err = indexColumns(dbc, cols); err != nil {
+	if err = indexColumns(dbc, fillfactor, cols); err != nil {
 		return err
 	}
 	if !*noIndexesFlag {
 		// Create unique index
-		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field)"
+		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field)" + fillfactor
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 		}
@@ -398,7 +399,7 @@ func index(dbc *util.DBC) error {
 	return nil
 }
 
-func indexColumns(dbc *util.DBC, cols []string) error {
+func indexColumns(dbc *util.DBC, fillfactor string, cols []string) error {
 	var err error
 	var c string
 	for _, c = range cols {
@@ -411,7 +412,7 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 			}
 		} else {
 			if !*noIndexesFlag {
-				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
+				var q = "CREATE INDEX ON " + tableout + " (" + c + ")" + fillfactor
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index: %s: %s", c, err)
 				}
@@ -553,6 +554,13 @@ func readConfigLDP1() (string, string, string, string, string, string, error) {
 	var dbname = viper.GetString(ldp + ".database_name")
 	var sslmode = viper.GetString(ldp + ".database_sslmode")
 	return host, port, user, password, dbname, sslmode, nil
+}
+
+func fillfactorString(optimizeFullUpdate bool) string {
+	if optimizeFullUpdate {
+		return " WITH (fillfactor=100)"
+	}
+	return " WITH (fillfactor=90)"
 }
 
 func printerr(format string, v ...any) {

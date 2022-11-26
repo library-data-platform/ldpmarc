@@ -191,6 +191,11 @@ updates.  This can be done by using the `-f` command-line option,
 which disables incremental update and requires ldpmarc to do a full
 update.
 
+If a very large number of records are changed routinely, it may be
+faster not to use incremental update at all and instead to run only
+full update every time.  In this case the `-F` option should be used
+(instead of `-f`) which will optimize storage for full updates only.
+
 
 Resetting ldpmarc
 -----------------
