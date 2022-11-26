@@ -178,7 +178,7 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		}
 		var m srs.Marc
 		for _, m = range mrecs {
-			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
+			q = "INSERT INTO " + tablefinal + "VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
 			if _, err = tx.Exec(context.TODO(), q,
 				id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return fmt.Errorf("adding record: %v", err)
@@ -186,9 +186,9 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		}
 		// cksum
 		if len(mrecs) != 0 {
-			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
+			q = "INSERT INTO " + cksumTable + "VALUES($1,$2)"
 			if _, err = tx.Exec(context.TODO(), q, id, cksum); err != nil {
-				return fmt.Errorf("adding cksum: %v", err)
+				return fmt.Errorf("adding checksum: %v", err)
 			}
 		}
 	}
@@ -326,8 +326,8 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 		// check if there are existing rows in tablefinal
 		var exist bool
 		var i int64
-		q = "SELECT 1 FROM " + tablefinal + " WHERE srs_id='" + *id + "' LIMIT 1"
-		err = connR.QueryRow(context.TODO(), q).Scan(&i)
+		q = "SELECT 1 FROM " + tablefinal + " WHERE srs_id=$1 LIMIT 1"
+		err = connR.QueryRow(context.TODO(), q, *id).Scan(&i)
 		switch {
 		case err == pgx.ErrNoRows:
 		case err != nil:
@@ -336,18 +336,18 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 			exist = true
 		}
 		// delete in tablefinal
-		q = "DELETE FROM " + tablefinal + " WHERE srs_id = '" + *id + "';"
-		if _, err = tx.Exec(context.TODO(), q); err != nil {
+		q = "DELETE FROM " + tablefinal + " WHERE srs_id=$1"
+		if _, err = tx.Exec(context.TODO(), q, *id); err != nil {
 			return fmt.Errorf("deleting record (change): %s", err)
 		}
 		// delete in cksum table
-		q = "DELETE FROM " + cksumTable + " WHERE id = '" + *id + "';"
-		if _, err = tx.Exec(context.TODO(), q); err != nil {
-			return fmt.Errorf("deleting cksum (change): %s", err)
+		q = "DELETE FROM " + cksumTable + " WHERE id=$1"
+		if _, err = tx.Exec(context.TODO(), q, *id); err != nil {
+			return fmt.Errorf("deleting checksum (change): %s", err)
 		}
 		var m srs.Marc
 		for _, m = range mrecs {
-			q = "INSERT INTO " + tablefinal + " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);"
+			q = "INSERT INTO " + tablefinal + " VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
 			if _, err = tx.Exec(context.TODO(), q,
 				id, m.Line, matchedID, instanceHRID, instanceID, m.Field, m.Ind1, m.Ind2, m.Ord, m.SF, m.Content); err != nil {
 				return fmt.Errorf("rewriting record: %s", err)
@@ -358,9 +358,9 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 		}
 		// cksum
 		if len(mrecs) != 0 {
-			q = "INSERT INTO " + cksumTable + " VALUES ($1, $2);"
+			q = "INSERT INTO " + cksumTable + " VALUES($1,$2)"
 			if _, err = tx.Exec(context.TODO(), q, id, cksum); err != nil {
-				return fmt.Errorf("rewriting cksum: %s", err)
+				return fmt.Errorf("rewriting checksum: %s", err)
 			}
 		}
 	}
