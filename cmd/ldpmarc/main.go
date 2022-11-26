@@ -268,7 +268,8 @@ func setupTables(dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.srs_marctab_"+field)
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
 		q = "CREATE TABLE " + tableout + field +
-			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "');"
+			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "')" +
+			" WITH (fillfactor=80)"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
@@ -386,7 +387,7 @@ func index(dbc *util.DBC) error {
 	}
 	if !*noIndexesFlag {
 		// Create unique index
-		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field);"
+		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field) WITH (fillfactor=80)"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating index: srs_id, line, field: %s", err)
 		}
@@ -410,7 +411,7 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 			}
 		} else {
 			if !*noIndexesFlag {
-				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
+				var q = "CREATE INDEX ON " + tableout + " (" + c + ") WITH (fillfactor=80)"
 				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index: %s: %s", c, err)
 				}
