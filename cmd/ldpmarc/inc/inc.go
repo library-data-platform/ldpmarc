@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
@@ -101,6 +102,7 @@ func VacuumCksum(dbc *util.DBC) error {
 }
 
 func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+	startUpdate := time.Now()
 	var err error
 	// add new data
 	if err = updateNew(dbc, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
@@ -115,17 +117,20 @@ func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		return fmt.Errorf("update change: %s", err)
 	}
 	// vacuum
-	printerr("vacuuming")
+	startVacuum := time.Now()
 	if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
 		return fmt.Errorf("vacuum analyze: %s", err)
 	}
 	if err = VacuumCksum(dbc); err != nil {
 		return fmt.Errorf("vacuum cksum: %s", err)
 	}
+	printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+	printerr("%s incremental update", util.ElapsedTime(startUpdate))
 	return nil
 }
 
 func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+	startNew := time.Now()
 	var err error
 	// find new data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_add")
@@ -197,10 +202,12 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_add"); err != nil {
 		return fmt.Errorf("dropping addition table: %s", err)
 	}
+	printerr(" %s new", util.ElapsedTime(startNew))
 	return nil
 }
 
 func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...any), verbose bool) error {
+	startDelete := time.Now()
 	var err error
 	// find deleted data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_delete")
@@ -258,10 +265,12 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_delete"); err != nil {
 		return fmt.Errorf("dropping deletion table: %s", err)
 	}
+	printerr(" %s delete", util.ElapsedTime(startDelete))
 	return nil
 }
 
 func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+	startChange := time.Now()
 	var err error
 	// find changed data
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_change")
@@ -365,6 +374,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_change"); err != nil {
 		return fmt.Errorf("dropping change table: %s", err)
 	}
+	printerr(" %s modify", util.ElapsedTime(startChange))
 	return nil
 }
 

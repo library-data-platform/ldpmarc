@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
@@ -124,4 +125,8 @@ func BeginTx(ctx context.Context, conn *pgx.Conn) (pgx.Tx, error) {
 type DBC struct {
 	Conn       *pgx.Conn
 	ConnString string
+}
+
+func ElapsedTime(start time.Time) string {
+	return fmt.Sprintf("[%.4f h]", time.Since(start).Hours())
 }

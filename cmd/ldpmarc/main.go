@@ -190,17 +190,17 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
 				return err
 			}
-			printerr(" %s checksum", elapsedTime(startCksum))
+			printerr(" %s checksum", util.ElapsedTime(startCksum))
 		}
 		startVacuum := time.Now()
 		if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
 			return err
 		}
-		printerr(" %s vacuum", elapsedTime(startVacuum))
 		if err = inc.VacuumCksum(dbc); err != nil {
 			return err
 		}
-		printerr("%s full update", elapsedTime(startUpdate))
+		printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+		printerr("%s full update", util.ElapsedTime(startUpdate))
 		printerr("%d output rows", writeCount)
 		printerr("new table is ready to use: " + loc.tablefinal())
 	}
@@ -352,7 +352,7 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		return 0, err
 	}
 
-	printerr(" %s transform", elapsedTime(startTime))
+	printerr(" %s transform", util.ElapsedTime(startTime))
 
 	startTime = time.Now()
 
@@ -372,7 +372,7 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 		src.Close()
 	}
 
-	printerr(" %s load", elapsedTime(startTime))
+	printerr(" %s load", util.ElapsedTime(startTime))
 
 	return writeCount, nil
 }
@@ -393,7 +393,7 @@ func index(dbc *util.DBC) error {
 		}
 	}
 	if !*noIndexesFlag {
-		printerr(" %s index", elapsedTime(startIndex))
+		printerr(" %s index", util.ElapsedTime(startIndex))
 	}
 	return nil
 }
@@ -553,10 +553,6 @@ func readConfigLDP1() (string, string, string, string, string, string, error) {
 	var dbname = viper.GetString(ldp + ".database_name")
 	var sslmode = viper.GetString(ldp + ".database_sslmode")
 	return host, port, user, password, dbname, sslmode, nil
-}
-
-func elapsedTime(start time.Time) string {
-	return fmt.Sprintf("[%.4f h]", time.Since(start).Hours())
 }
 
 func printerr(format string, v ...any) {
