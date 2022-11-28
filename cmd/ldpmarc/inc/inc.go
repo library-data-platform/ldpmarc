@@ -46,7 +46,7 @@ func IncUpdateAvail(dbc *util.DBC) (bool, error) {
 	return true, nil
 }
 
-func CreateCksum(dbc *util.DBC, fillfactor, srsRecords, srsMarc, srsMarctab, srsMarcAttr string) error {
+func CreateCksum(dbc *util.DBC, srsRecords, srsMarc, srsMarctab, srsMarcAttr string) error {
 	var err error
 	var tx pgx.Tx
 	if tx, err = util.BeginTx(context.TODO(), dbc.Conn); err != nil {
@@ -59,7 +59,7 @@ func CreateCksum(dbc *util.DBC, fillfactor, srsRecords, srsMarc, srsMarctab, srs
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	// Filter should match srs.getInstanceID()
-	q = "CREATE TABLE " + cksumTable + " (id uuid NOT NULL,cksum text)" + fillfactor
+	q = "CREATE TABLE " + cksumTable + " (id uuid NOT NULL,cksum text) WITH (fillfactor=90)"
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}
@@ -70,7 +70,7 @@ func CreateCksum(dbc *util.DBC, fillfactor, srsRecords, srsMarc, srsMarctab, srs
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("writing data to checksum table: %s", err)
 	}
-	q = "ALTER TABLE " + cksumTable + " ADD CONSTRAINT cksum_pkey PRIMARY KEY (id)" + fillfactor
+	q = "ALTER TABLE " + cksumTable + " ADD CONSTRAINT cksum_pkey PRIMARY KEY (id)"
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("indexing checksum table: %s", err)
 	}
@@ -138,7 +138,7 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating addition table: %s", err)
 	}
-	q = "ALTER TABLE marctab.inc_add ADD CONSTRAINT marctab_add_pkey PRIMARY KEY (id) WITH (fillfactor=100)"
+	q = "ALTER TABLE marctab.inc_add ADD CONSTRAINT marctab_add_pkey PRIMARY KEY (id);"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on addition table: %s", err)
 	}
@@ -215,7 +215,7 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating deletion table: %s", err)
 	}
-	q = "ALTER TABLE marctab.inc_delete ADD CONSTRAINT marctab_delete_pkey PRIMARY KEY (id) WITH (fillfactor=100)"
+	q = "ALTER TABLE marctab.inc_delete ADD CONSTRAINT marctab_delete_pkey PRIMARY KEY (id);"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on deletion table: %s", err)
 	}
@@ -278,7 +278,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating change table: %s", err)
 	}
-	q = "ALTER TABLE marctab.inc_change ADD CONSTRAINT marctab_change_pkey PRIMARY KEY (id) WITH (fillfactor=100)"
+	q = "ALTER TABLE marctab.inc_change ADD CONSTRAINT marctab_change_pkey PRIMARY KEY (id);"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on change table: %s", err)
 	}
