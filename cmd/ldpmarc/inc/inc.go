@@ -59,7 +59,7 @@ func CreateCksum(dbc *util.DBC, srsRecords, srsMarc, srsMarctab, srsMarcAttr str
 		return fmt.Errorf("dropping checksum table: %s", err)
 	}
 	// Filter should match srs.getInstanceID()
-	q = "CREATE TABLE " + cksumTable + " (id uuid NOT NULL,cksum text) WITH (fillfactor=90)"
+	q = "CREATE TABLE " + cksumTable + " (id uuid NOT NULL,cksum text)"
 	if _, err = tx.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating checksum table: %s", err)
 	}

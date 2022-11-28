@@ -268,8 +268,7 @@ func setupTables(dbc *util.DBC) error {
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS ldpmarc.srs_marctab_"+field)
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
 		q = "CREATE TABLE " + tableout + field +
-			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "')" +
-			" WITH (fillfactor=90)"
+			" PARTITION OF " + tableout + " FOR VALUES IN ('" + field + "')"
 		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 			return fmt.Errorf("creating partition: %s", err)
 		}
