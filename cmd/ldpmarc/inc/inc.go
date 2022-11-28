@@ -12,7 +12,7 @@ import (
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
 
-const schemaVersion int64 = 13
+const schemaVersion int64 = 12
 const cksumTable = "marctab.cksum"
 const metadataTableS = "marctab"
 const metadataTableT = "metadata"
