@@ -380,16 +380,15 @@ func index(dbc *util.DBC) error {
 	startIndex := time.Now()
 	var err error
 	// Index columns
-	var cols = []string{"content", "matched_id", "instance_hrid", "instance_id", "ind1", "ind2", "ord", "sf"}
+	var cols = []string{
+		"content",
+		"srs_id",
+		"matched_id",
+		"instance_hrid",
+		"instance_id",
+		"sf, ind1, ind2, ord"}
 	if err = indexColumns(dbc, cols); err != nil {
 		return err
-	}
-	if !*noIndexesFlag {
-		// Create unique index
-		var q = "CREATE UNIQUE INDEX ON " + tableout + " (srs_id, line, field)"
-		if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
-			return fmt.Errorf("creating index: srs_id, line, field: %s", err)
-		}
 	}
 	if !*noIndexesFlag {
 		printerr(" %s index", util.ElapsedTime(startIndex))
@@ -398,20 +397,19 @@ func index(dbc *util.DBC) error {
 }
 
 func indexColumns(dbc *util.DBC, cols []string) error {
-	var err error
-	var c string
-	for _, c = range cols {
+	for _, c := range cols {
+		printerr("creating index: %s", c)
 		if c == "content" {
 			if !*noTrigramIndexFlag && !*noIndexesFlag {
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
-				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+				if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 				}
 			}
 		} else {
 			if !*noIndexesFlag {
 				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
-				if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+				if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
 					return fmt.Errorf("creating index: %s: %s", c, err)
 				}
 			}
