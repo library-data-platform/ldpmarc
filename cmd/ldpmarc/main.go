@@ -398,7 +398,9 @@ func index(dbc *util.DBC) error {
 
 func indexColumns(dbc *util.DBC, cols []string) error {
 	for _, c := range cols {
-		printerr("creating index: %s", c)
+		if *verboseFlag {
+			printerr("creating index: %s", c)
+		}
 		if c == "content" {
 			if !*noTrigramIndexFlag && !*noIndexesFlag {
 				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
