@@ -142,6 +142,9 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on addition table: %s", err)
 	}
+	if err = util.VacuumAnalyze(dbc, "marctab.inc_add"); err != nil {
+		return fmt.Errorf("vacuum analyze: %s", err)
+	}
 	var connw *pgx.Conn
 	if connw, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
 		return err
@@ -219,6 +222,9 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on deletion table: %s", err)
 	}
+	if err = util.VacuumAnalyze(dbc, "marctab.inc_delete"); err != nil {
+		return fmt.Errorf("vacuum analyze: %s", err)
+	}
 	if verbose {
 		// show changes
 		q = "SELECT id FROM marctab.inc_delete;"
@@ -281,6 +287,9 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	q = "ALTER TABLE marctab.inc_change ADD CONSTRAINT marctab_change_pkey PRIMARY KEY (id);"
 	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("creating primary key on change table: %s", err)
+	}
+	if err = util.VacuumAnalyze(dbc, "marctab.inc_change"); err != nil {
+		return fmt.Errorf("vacuum analyze: %s", err)
 	}
 	// connR is used for queries concurrent with reading rows.
 	var connR *pgx.Conn
