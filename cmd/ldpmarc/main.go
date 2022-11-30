@@ -385,8 +385,7 @@ func index(dbc *util.DBC) error {
 		"srs_id",
 		"matched_id",
 		"instance_hrid",
-		"instance_id",
-		"sf"}
+		"instance_id"}
 	if err = indexColumns(dbc, cols); err != nil {
 		return err
 	}
