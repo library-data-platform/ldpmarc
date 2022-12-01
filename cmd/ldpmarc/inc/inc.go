@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v4"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
