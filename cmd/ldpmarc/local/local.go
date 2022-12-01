@@ -16,14 +16,14 @@ import (
 
 type Record struct {
 	SRSID        string
-	Line         int64
+	Line         int16
 	MatchedID    string
 	InstanceHRID string
 	InstanceID   string
 	Field        string
 	Ind1         string
 	Ind2         string
-	Ord          int64
+	Ord          int16
 	SF           string
 	Content      string
 }

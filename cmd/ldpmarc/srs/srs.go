@@ -11,11 +11,11 @@ import (
 
 // Marc is a single "row" of data extracted from part of a MARC record.
 type Marc struct {
-	Line    int64
+	Line    int16
 	Field   string
 	Ind1    string
 	Ind2    string
-	Ord     int64
+	Ord     int16
 	SF      string
 	Content string
 }
@@ -58,8 +58,8 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	}
 	// Each element of the fields array is an object (map) with a MARC tag
 	// and possibly subfields.
-	var line int64 = 1
-	var fieldCounts = make(map[string]int64)
+	var line int16 = 1
+	var fieldCounts = make(map[string]int16)
 	for _, i = range a {
 		if m, ok = i.(map[string]any); !ok {
 			return nil, "", fmt.Errorf("parsing: \"fields\" element is not an object")
@@ -67,7 +67,7 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 		var t string
 		var ii any
 		for t, ii = range m {
-			var fieldC int64 = fieldCounts[t] + 1
+			var fieldC = fieldCounts[t] + 1
 			fieldCounts[t] = fieldC
 			switch v := ii.(type) {
 			case string:
@@ -122,7 +122,7 @@ func Transform(marcjson *string, state string) ([]Marc, string, error) {
 	return mrecs, instanceID, nil
 }
 
-func transformSubfields(mrecs *[]Marc, line *int64, field string, ord int64, sm map[string]any) error {
+func transformSubfields(mrecs *[]Marc, line *int16, field string, ord int16, sm map[string]any) error {
 	var ok bool
 	var i any
 	// Ind1
