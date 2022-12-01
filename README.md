@@ -31,7 +31,7 @@ System requirements
   * [Metadb](https://github.com/metadb-project/metadb) 0.11
   * [LDLite](https://github.com/library-data-platform/ldlite)
 * Required to build from source:
-  * [Go](https://golang.org/) 1.18 or later
+  * [Go](https://golang.org/) 1.19 or later
 * Required to build and run via Docker:
   * [Docker](https://docker.com) 17.05 or later
 

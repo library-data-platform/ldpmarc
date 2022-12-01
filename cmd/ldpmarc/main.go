@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/local"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
@@ -295,7 +295,7 @@ func processAll(loc *locations, dbc *util.DBC, store *local.Store) (int64, error
 	var err error
 	var msg *string
 	var writeCount int64
-	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + loc.SrsMarcAttr + " FROM " + loc.SrsRecords + " r JOIN " + loc.SrsMarc + " m ON r.id = m.id"
+	var q = "SELECT r.id, r.matched_id, r.external_hrid instance_hrid, r.state, m." + loc.SrsMarcAttr + "::text FROM " + loc.SrsRecords + " r JOIN " + loc.SrsMarc + " m ON r.id = m.id"
 	var rows pgx.Rows
 	if rows, err = dbc.Conn.Query(context.TODO(), q); err != nil {
 		return 0, fmt.Errorf("selecting marc records: %v", err)
