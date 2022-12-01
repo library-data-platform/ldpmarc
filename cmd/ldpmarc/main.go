@@ -381,7 +381,6 @@ func index(dbc *util.DBC) error {
 	var err error
 	// Index columns
 	var cols = []string{
-		"content",
 		"srs_id",
 		"matched_id",
 		"instance_hrid",
