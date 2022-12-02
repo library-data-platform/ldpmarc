@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/inc"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/local"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"

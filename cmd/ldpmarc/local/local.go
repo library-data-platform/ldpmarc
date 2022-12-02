@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
 	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
 )
