@@ -24,7 +24,7 @@ System requirements
 * Linux
 * [PostgreSQL](https://www.postgresql.org/) 13.9 or later
   * PostgreSQL 14.6 or later is recommended
-  * AWS RDS PostgreSQL is supported; Aurora is not supported
+  * AWS RDS PostgreSQL optionally may be used; Aurora is not supported
 * One of the following SRS data sources:
   * [LDP1](https://github.com/library-data-platform/ldp) 1.6.0 or later
   * [Metadb](https://github.com/metadb-project/metadb) 0.12
