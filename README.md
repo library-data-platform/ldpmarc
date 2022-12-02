@@ -22,13 +22,12 @@ System requirements
 ### Software
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 13.7 or later
-  * PostgreSQL 14.3 or later is recommended
+* [PostgreSQL](https://www.postgresql.org/) 13.9 or later
+  * PostgreSQL 14.6 or later is recommended
   * AWS RDS PostgreSQL is supported; Aurora is not supported
-* [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html) (PostgreSQL module)
 * One of the following SRS data sources:
   * [LDP1](https://github.com/library-data-platform/ldp) 1.6.0 or later
-  * [Metadb](https://github.com/metadb-project/metadb) 0.11
+  * [Metadb](https://github.com/metadb-project/metadb) 0.12
   * [LDLite](https://github.com/library-data-platform/ldlite)
 * Required to build from source:
   * [Go](https://golang.org/) 1.19 or later
@@ -49,38 +48,6 @@ The PostgreSQL setting `max_locks_per_transaction` should be increased
 to avoid an "out of shared memory" error.  The recommended setting is:
 
 * `max_locks_per_transaction`: `1100`
-
-### Enabling pg_trgm
-
-The pg_trgm module is used to support the SQL `LIKE` and `ILIKE`
-pattern matching operators on MARC content data.  The module is
-enabled in the database by a superuser:
-
-```
-CREATE EXTENSION pg_trgm WITH SCHEMA pg_catalog;
-```
-
-Then grant the LDP1 administrator permission to use the extension,
-e.g.:
-```
-GRANT USAGE ON SCHEMA public TO ldpadmin;
-```
-
-To test if the extension is working, log in as the ldpadmin user and
-run:
-
-```
-CREATE TEMP TABLE t (v varchar(1));
-
-CREATE INDEX ON t USING GIN (v gin_trgm_ops);
-```
-
-If this shows any errors, then the extension may not be enabled.
-
-If the pg_trgm extension is not enabled, the `-T` option must be
-included for ldpmarc to disable trigram indexes, but this will
-significantly impact query performance when using the `LIKE` or
-`ILIKE` operator with the `content` column.
 
 
 Building ldpmarc
@@ -124,7 +91,7 @@ a single user.
 For example:
 
 ```
-ldpmarc -D ldp1_data -u ldp
+ldpmarc -D data -u ldp
 ```
 
 SRS MARC data are read from the database tables `public.srs_marc` and
@@ -202,8 +169,7 @@ tables:
 DROP TABLE IF EXISTS folio_source_record.marctab, marctab._srs_marctab, marctab.cksum, marctab.metadata, public.srs_marctab;
 ```
 
-This may be useful for uninstalling ldpmarc, or to restart it with a
-blank slate.
+This may be useful for completely resetting ldpmarc.
 
 
 Running ldpmarc with Docker

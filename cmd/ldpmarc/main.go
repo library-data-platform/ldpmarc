@@ -24,7 +24,8 @@ var fullUpdateFlag = flag.Bool("f", false, "Perform full update even if incremen
 var incUpdateFlag = flag.Bool("i", false, "[option no longer supported]")
 var datadirFlag = flag.String("D", "", "Data directory")
 var ldpUserFlag = flag.String("u", "", "User to be granted select privileges")
-var noTrigramIndexFlag = flag.Bool("T", false, "Disable creation of trigram indexes")
+var noTrigramIndexFlag = flag.Bool("T", false, "[option no longer supported]")
+var trigramIndexFlag = flag.Bool("t", false, "Create trigram index on content column")
 var noIndexesFlag = flag.Bool("I", false, "Disable creation of all indexes")
 var verboseFlag = flag.Bool("v", false, "Enable verbose output")
 var csvFilenameFlag = flag.String("c", "", "Write output to CSV file instead of a database")
@@ -61,6 +62,10 @@ func main() {
 	}
 	if *incUpdateFlag {
 		printerr("-i option no longer supported")
+		os.Exit(1)
+	}
+	if *noTrigramIndexFlag {
+		printerr("-T option no longer supported")
 		os.Exit(1)
 	}
 	loc := setupLocations()
@@ -170,8 +175,10 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 	}
 	if *csvFilenameFlag == "" {
 		// Index columns
-		if err = index(dbc); err != nil {
-			return err
+		if !*noIndexesFlag {
+			if err = index(dbc); err != nil {
+				return err
+			}
 		}
 		// Replace table
 		if err = replace(loc, dbc); err != nil {
@@ -236,7 +243,7 @@ func setupTables(dbc *util.DBC) error {
 	var err error
 	var q string
 	_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
-	if !*noTrigramIndexFlag && !util.IsTrgmAvailable(dbc) {
+	if *trigramIndexFlag && !util.IsTrgmAvailable(dbc) {
 		return fmt.Errorf("unable to access pg_trgm module extension")
 	}
 	var lz4 string
@@ -386,12 +393,13 @@ func index(dbc *util.DBC) error {
 		"instance_hrid",
 		"instance_id",
 		"sf"}
+	if *trigramIndexFlag {
+		cols = append(cols, "content")
+	}
 	if err = indexColumns(dbc, cols); err != nil {
 		return err
 	}
-	if !*noIndexesFlag {
-		printerr(" %s index", util.ElapsedTime(startIndex))
-	}
+	printerr(" %s index", util.ElapsedTime(startIndex))
 	return nil
 }
 
@@ -401,18 +409,14 @@ func indexColumns(dbc *util.DBC, cols []string) error {
 			printerr("creating index: %s", c)
 		}
 		if c == "content" {
-			if !*noTrigramIndexFlag && !*noIndexesFlag {
-				var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
-				if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
-					return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
-				}
+			var q = "CREATE INDEX ON " + tableout + " USING GIN (" + c + " gin_trgm_ops)"
+			if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
+				return fmt.Errorf("creating index with pg_trgm extension: %s: %s", c, err)
 			}
 		} else {
-			if !*noIndexesFlag {
-				var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
-				if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
-					return fmt.Errorf("creating index: %s: %s", c, err)
-				}
+			var q = "CREATE INDEX ON " + tableout + " (" + c + ")"
+			if _, err := dbc.Conn.Exec(context.TODO(), q); err != nil {
+				return fmt.Errorf("creating index: %s: %s", c, err)
 			}
 		}
 	}
