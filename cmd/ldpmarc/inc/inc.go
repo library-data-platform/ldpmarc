@@ -389,7 +389,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 
 func filterQuery(srsRecords, srsMarc, srsMarcAttr, filter string) string {
 	return "" +
-		"SELECT r.id::uuid, r.matched_id::uuid, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + ", " + util.MD5(srsMarcAttr) + " cksum " +
+		"SELECT r.id::uuid, r.matched_id::uuid, r.external_hrid instance_hrid, r.state, m." + srsMarcAttr + "::text, " + util.MD5(srsMarcAttr) + " cksum " +
 		"    FROM " + srsRecords + " r " +
 		"        JOIN " + filter + " f ON r.id::uuid = f.id " +
 		"        JOIN " + srsMarc + " m ON r.id = m.id;"
