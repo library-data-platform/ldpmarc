@@ -169,7 +169,7 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		printerr("output will be written to file: %s", *csvFilenameFlag)
 	}
 	// Process MARC data
-	_, writeCount, err := process(loc, dbc)
+	inputCount, writeCount, err := process(loc, dbc)
 	if err != nil {
 		return err
 	}
@@ -192,11 +192,13 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 		}
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_cksum;")
 		_, _ = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS dbsystem.ldpmarc_metadata;")
-		startCksum := time.Now()
-		if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
-			return err
+		if inputCount > 0 {
+			startCksum := time.Now()
+			if err = inc.CreateCksum(dbc, loc.SrsRecords, loc.SrsMarc, loc.tablefinal(), loc.SrsMarcAttr); err != nil {
+				return err
+			}
+			printerr(" %s checksum", util.ElapsedTime(startCksum))
 		}
-		printerr(" %s checksum", util.ElapsedTime(startCksum))
 		startVacuum := time.Now()
 		if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
 			return err
