@@ -198,15 +198,15 @@ func fullUpdate(loc *locations, dbc *util.DBC) error {
 				return err
 			}
 			printerr(" %s checksum", util.ElapsedTime(startCksum))
+			startVacuum := time.Now()
+			if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
+				return err
+			}
+			if err = inc.VacuumCksum(dbc); err != nil {
+				return err
+			}
+			printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 		}
-		startVacuum := time.Now()
-		if err = util.VacuumAnalyze(dbc, loc.tablefinal()); err != nil {
-			return err
-		}
-		if err = inc.VacuumCksum(dbc); err != nil {
-			return err
-		}
-		printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 		printerr("%s full update", util.ElapsedTime(startUpdate))
 		printerr("%d output rows", writeCount)
 		printerr("new table is ready to use: " + loc.tablefinal())
