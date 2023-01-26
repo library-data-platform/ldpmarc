@@ -119,7 +119,7 @@ done
 Running ldpmarc with Metadb 1.0
 -------------------------------
 
-The usage for ldpmarc with Metadb 0.12 is similar to running it with
+The usage for ldpmarc with Metadb 1.0 is similar to running it with
 LDP1.
 
 When running ldpmarc, the `-M` option should be added to enable
