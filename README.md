@@ -1,7 +1,7 @@
 ldpmarc
 =======
 
-Copyright (C) 2021-2022 The Open Library Foundation  
+Copyright (C) 2021-2023 The Open Library Foundation  
 
 This software is distributed under the terms of the Apache License, 
 Version 2.0.  See the file [LICENSE](LICENSE) for more information.
@@ -16,19 +16,19 @@ System requirements
 
 ### Hardware
 
-* Database storage (estimated): 500 GB
-* Local storage (estimated): 500 GB
+* Database storage: 500 GB
+* Local storage: 500 GB
 
 ### Software
 
 * Linux
-* [PostgreSQL](https://www.postgresql.org/) 13.9 or later
-  * PostgreSQL 14.6 or later is recommended
+* [PostgreSQL](https://www.postgresql.org/) 13 or later
+  * PostgreSQL 15 or later is recommended
   * AWS RDS PostgreSQL optionally may be used (with servers in the
     same zone/subnet); Aurora is not supported
 * One of the following SRS data sources:
-  * [LDP1](https://github.com/library-data-platform/ldp) 1.6.0 or later
-  * [Metadb](https://github.com/metadb-project/metadb) 0.12
+  * [LDP1](https://github.com/library-data-platform/ldp) 1.7 or later
+  * [Metadb](https://github.com/metadb-project/metadb) 1.0
   * [LDLite](https://github.com/library-data-platform/ldlite)
 * Required to build from source:
   * [Go](https://golang.org/) 1.19 or later
@@ -37,7 +37,7 @@ System requirements
 
 ### Other requirements
 
-The ldpmarc software currently supports MARC 21 data.
+The ldpmarc software supports MARC 21 data.
 
 
 Database configuration
@@ -116,8 +116,8 @@ done
 ```
 
 
-Running ldpmarc with Metadb 0.12
---------------------------------
+Running ldpmarc with Metadb 1.0
+-------------------------------
 
 The usage for ldpmarc with Metadb 0.12 is similar to running it with
 LDP1.
@@ -167,7 +167,9 @@ All ldpmarc data can be deleted from the database by dropping these
 tables:
 
 ```
-DROP TABLE IF EXISTS folio_source_record.marctab, marctab._srs_marctab, marctab.cksum, marctab.metadata, public.srs_marctab;
+DROP TABLE IF EXISTS folio_source_record.marctab,
+    marctab._srs_marctab, marctab.cksum,
+    marctab.metadata, public.srs_marctab;
 ```
 
 This may be useful for completely resetting ldpmarc.
