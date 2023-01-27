@@ -40,17 +40,6 @@ System requirements
 The ldpmarc software supports MARC 21 data.
 
 
-Database configuration
-----------------------
-
-### PostgreSQL settings
-
-The PostgreSQL setting `max_locks_per_transaction` should be increased
-to avoid an "out of shared memory" error.  The recommended setting is:
-
-* `max_locks_per_transaction`: `1100`
-
-
 Building ldpmarc
 ----------------
 
