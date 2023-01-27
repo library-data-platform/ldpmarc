@@ -116,7 +116,7 @@ func Run(opts *TransformOptions) error {
 	if incUpdateAvail && !opts.FullUpdate && opts.CSVFileName == "" {
 		printerr("starting incremental update")
 		if err = inc.IncUpdate(dbc, opts.Loc.SrsRecords, opts.Loc.SrsMarc, opts.Loc.SrsMarcAttr,
-			opts.Loc.tablefinal(), printerr, opts.Verbose); err != nil {
+			opts.Loc.tablefinal(), printerr, opts.Verbose, opts.Vacuum); err != nil {
 			return err
 		}
 	} else {

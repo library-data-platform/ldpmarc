@@ -101,7 +101,8 @@ func VacuumCksum(dbc *util.DBC) error {
 	return nil
 }
 
-func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any),
+	verbose, vacuum bool) error {
 	startUpdate := time.Now()
 	var err error
 	// add new data
@@ -117,14 +118,16 @@ func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		return fmt.Errorf("update change: %s", err)
 	}
 	// vacuum
-	startVacuum := time.Now()
-	if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
-		return fmt.Errorf("vacuum analyze: %s", err)
+	if vacuum {
+		startVacuum := time.Now()
+		if err = util.VacuumAnalyze(dbc, tablefinal); err != nil {
+			return fmt.Errorf("vacuum analyze: %s", err)
+		}
+		if err = VacuumCksum(dbc); err != nil {
+			return fmt.Errorf("vacuum cksum: %s", err)
+		}
+		printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 	}
-	if err = VacuumCksum(dbc); err != nil {
-		return fmt.Errorf("vacuum cksum: %s", err)
-	}
-	printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 	printerr("%s incremental update", util.ElapsedTime(startUpdate))
 	return nil
 }
