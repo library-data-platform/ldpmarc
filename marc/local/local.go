@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
+	"github.com/library-data-platform/ldpmarc/marc/util"
+	"github.com/library-data-platform/ldpmarc/marc/uuid"
 )
 
 type Record struct {

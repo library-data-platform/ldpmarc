@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/util"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
+	"github.com/library-data-platform/ldpmarc/marc/srs"
+	"github.com/library-data-platform/ldpmarc/marc/util"
+	"github.com/library-data-platform/ldpmarc/marc/uuid"
 )
 
 const schemaVersion int64 = 13

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/srs"
+	"github.com/library-data-platform/ldpmarc/marc/srs"
 )
 
 func MD5(srsMarcAttr string) string {

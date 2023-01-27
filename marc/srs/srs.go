@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/library-data-platform/ldpmarc/cmd/ldpmarc/uuid"
+	"github.com/library-data-platform/ldpmarc/marc/uuid"
 )
 
 // Marc is a single "row" of data extracted from part of a MARC record.
