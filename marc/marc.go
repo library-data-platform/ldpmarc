@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -128,25 +126,25 @@ func Run(opts *TransformOptions) error {
 		if opts.Verbose >= 1 {
 			opts.PrintErr("starting full update")
 		}
-		// Catch SIGTERM etc.
-		c := make(chan os.Signal, 2)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		go func() {
-			for range c {
-				_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
-				_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
-				var conn *pgx.Conn
-				conn, err = pgx.Connect(context.TODO(), dbc.ConnString)
-				if err == nil {
-					_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
-					for _, field := range allFields {
-						_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
-					}
-					_ = conn.Close(context.TODO())
-				}
-				os.Exit(130)
-			}
-		}()
+		//// Catch SIGTERM etc.
+		//c := make(chan os.Signal, 2)
+		//signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		//go func() {
+		//	for range c {
+		//		_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
+		//		_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
+		//		var conn *pgx.Conn
+		//		conn, err = pgx.Connect(context.TODO(), dbc.ConnString)
+		//		if err == nil {
+		//			_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+		//			for _, field := range allFields {
+		//				_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
+		//			}
+		//			_ = conn.Close(context.TODO())
+		//		}
+		//		os.Exit(130)
+		//	}
+		//}()
 		// Run full update
 		if err = fullUpdate(opts, dbc, opts.PrintErr); err != nil {
 			var err2 error
