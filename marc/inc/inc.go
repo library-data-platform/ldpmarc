@@ -102,7 +102,7 @@ func VacuumCksum(dbc *util.DBC) error {
 }
 
 func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any),
-	verbose, vacuum bool) error {
+	verbose int, vacuum bool) error {
 	startUpdate := time.Now()
 	var err error
 	// add new data
@@ -126,13 +126,17 @@ func IncUpdate(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 		if err = VacuumCksum(dbc); err != nil {
 			return fmt.Errorf("vacuum cksum: %s", err)
 		}
-		printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+		if verbose >= 1 {
+			printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+		}
 	}
-	printerr("%s incremental update", util.ElapsedTime(startUpdate))
+	if verbose >= 1 {
+		printerr("%s incremental update", util.ElapsedTime(startUpdate))
+	}
 	return nil
 }
 
-func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose int) error {
 	startNew := time.Now()
 	var err error
 	// find new data
@@ -179,7 +183,9 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 			continue
 		}
 		if _, err = uuid.EncodeUUID(instanceID); err != nil {
-			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
+			if verbose >= 1 {
+				printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
+			}
 			instanceID = uuid.NilUUID
 		}
 		var m srs.Marc
@@ -208,11 +214,13 @@ func updateNew(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal strin
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_add"); err != nil {
 		return fmt.Errorf("dropping addition table: %s", err)
 	}
-	printerr(" %s new", util.ElapsedTime(startNew))
+	if verbose >= 1 {
+		printerr(" %s new", util.ElapsedTime(startNew))
+	}
 	return nil
 }
 
-func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...any), verbose bool) error {
+func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(string, ...any), verbose int) error {
 	startDelete := time.Now()
 	var err error
 	// find deleted data
@@ -228,7 +236,7 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	if err = util.VacuumAnalyze(dbc, "marctab.inc_delete"); err != nil {
 		return fmt.Errorf("vacuum analyze: %s", err)
 	}
-	if verbose {
+	if verbose >= 2 {
 		// show changes
 		q = "SELECT id FROM marctab.inc_delete;"
 		var rows pgx.Rows
@@ -241,7 +249,9 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 			if err = rows.Scan(&id); err != nil {
 				return fmt.Errorf("reading deletion ID: %s", err)
 			}
-			printerr("removing: id=%s", id)
+			if verbose >= 1 {
+				printerr("removing: id=%s", id)
+			}
 		}
 		if err = rows.Err(); err != nil {
 			return fmt.Errorf("reading deletion rows: %s", err)
@@ -274,11 +284,13 @@ func updateDelete(dbc *util.DBC, srsRecords, tablefinal string, printerr func(st
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_delete"); err != nil {
 		return fmt.Errorf("dropping deletion table: %s", err)
 	}
-	printerr(" %s delete", util.ElapsedTime(startDelete))
+	if verbose >= 1 {
+		printerr(" %s delete", util.ElapsedTime(startDelete))
+	}
 	return nil
 }
 
-func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose bool) error {
+func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any), verbose int) error {
 	startChange := time.Now()
 	var err error
 	// find changed data
@@ -332,7 +344,9 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 			continue
 		}
 		if _, err = uuid.EncodeUUID(instanceID); err != nil {
-			printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
+			if verbose >= 1 {
+				printerr("id=%s: encoding instance_id %q: %v", *id, instanceID, err)
+			}
 			instanceID = uuid.NilUUID
 		}
 		// check if there are existing rows in tablefinal
@@ -365,7 +379,7 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 				return fmt.Errorf("rewriting record: %s", err)
 			}
 		}
-		if verbose && exist && len(mrecs) == 0 {
+		if verbose >= 2 && exist && len(mrecs) == 0 {
 			printerr("removing: id=%s", *id)
 		}
 		// cksum
@@ -386,7 +400,9 @@ func updateChange(dbc *util.DBC, srsRecords, srsMarc, srsMarcAttr, tablefinal st
 	if _, err = dbc.Conn.Exec(context.TODO(), "DROP TABLE IF EXISTS marctab.inc_change"); err != nil {
 		return fmt.Errorf("dropping change table: %s", err)
 	}
-	printerr(" %s modify", util.ElapsedTime(startChange))
+	if verbose >= 1 {
+		printerr(" %s modify", util.ElapsedTime(startChange))
+	}
 	return nil
 }
 

@@ -25,15 +25,18 @@ type TransformOptions struct {
 	Users        []string
 	TrigramIndex bool
 	NoIndexes    bool
-	Verbose      bool
+	Verbose      int // 0=quiet, 1=summary, 2=detail
 	CSVFileName  string
 	SRSRecords   string
 	SRSMarc      string
 	SRSMarcAttr  string
 	Metadb       bool
 	Vacuum       bool
+	PrintErr     PrintErr
 	Loc          Locations
 }
+
+type PrintErr func(string, ...interface{})
 
 type Locations struct {
 	SrsRecords       string
@@ -114,13 +117,17 @@ func Run(opts *TransformOptions) error {
 		return err
 	}
 	if incUpdateAvail && !opts.FullUpdate && opts.CSVFileName == "" {
-		printerr("starting incremental update")
+		if opts.Verbose >= 1 {
+			opts.PrintErr("starting incremental update")
+		}
 		if err = inc.IncUpdate(dbc, opts.Loc.SrsRecords, opts.Loc.SrsMarc, opts.Loc.SrsMarcAttr,
-			opts.Loc.tablefinal(), printerr, opts.Verbose, opts.Vacuum); err != nil {
+			opts.Loc.tablefinal(), opts.PrintErr, opts.Verbose, opts.Vacuum); err != nil {
 			return err
 		}
 	} else {
-		printerr("starting full update")
+		if opts.Verbose >= 1 {
+			opts.PrintErr("starting full update")
+		}
 		// Catch SIGTERM etc.
 		c := make(chan os.Signal, 2)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -141,7 +148,7 @@ func Run(opts *TransformOptions) error {
 			}
 		}()
 		// Run full update
-		if err = fullUpdate(opts, dbc); err != nil {
+		if err = fullUpdate(opts, dbc, opts.PrintErr); err != nil {
 			var err2 error
 			var conn *pgx.Conn
 			conn, err2 = pgx.Connect(context.TODO(), dbc.ConnString)
@@ -194,7 +201,7 @@ func setupSchema(dbc *util.DBC) error {
 	return nil
 }
 
-func fullUpdate(opts *TransformOptions, dbc *util.DBC) error {
+func fullUpdate(opts *TransformOptions, dbc *util.DBC, printerr PrintErr) error {
 	startUpdate := time.Now()
 	var err error
 	if opts.CSVFileName != "" {
@@ -204,17 +211,19 @@ func fullUpdate(opts *TransformOptions, dbc *util.DBC) error {
 		defer func(csvFile *os.File) {
 			_ = csvFile.Close()
 		}(csvFile)
-		printerr("output will be written to file: %s", opts.CSVFileName)
+		if opts.Verbose >= 1 {
+			printerr("output will be written to file: %s", opts.CSVFileName)
+		}
 	}
 	// Process MARC data
-	inputCount, writeCount, err := process(opts, dbc)
+	inputCount, writeCount, err := process(opts, dbc, printerr)
 	if err != nil {
 		return err
 	}
 	if opts.CSVFileName == "" {
 		// Index columns
 		if !opts.NoIndexes {
-			if err = index(opts, dbc); err != nil {
+			if err = index(opts, dbc, printerr); err != nil {
 				return err
 			}
 		}
@@ -236,7 +245,9 @@ func fullUpdate(opts *TransformOptions, dbc *util.DBC) error {
 				opts.Loc.SrsMarcAttr); err != nil {
 				return err
 			}
-			printerr(" %s checksum", util.ElapsedTime(startCksum))
+			if opts.Verbose >= 1 {
+				printerr(" %s checksum", util.ElapsedTime(startCksum))
+			}
 			if opts.Vacuum {
 				startVacuum := time.Now()
 				if err = util.VacuumAnalyze(dbc, opts.Loc.tablefinal()); err != nil {
@@ -245,17 +256,23 @@ func fullUpdate(opts *TransformOptions, dbc *util.DBC) error {
 				if err = inc.VacuumCksum(dbc); err != nil {
 					return err
 				}
-				printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+				if opts.Verbose >= 1 {
+					printerr(" %s vacuum", util.ElapsedTime(startVacuum))
+				}
 			}
 		}
-		printerr("%s full update", util.ElapsedTime(startUpdate))
-		printerr("%d output rows", writeCount)
-		printerr("new table is ready to use: " + opts.Loc.tablefinal())
+		if opts.Verbose >= 1 {
+			printerr("%s full update", util.ElapsedTime(startUpdate))
+			printerr("%d output rows", writeCount)
+			printerr("new table is ready to use: " + opts.Loc.tablefinal())
+		} else {
+
+		}
 	}
 	return nil
 }
 
-func process(opts *TransformOptions, dbc *util.DBC) (int64, int64, error) {
+func process(opts *TransformOptions, dbc *util.DBC, printerr PrintErr) (int64, int64, error) {
 	var err error
 	var store *local.Store
 	if store, err = local.NewStore(opts.Datadir); err != nil {
@@ -270,10 +287,12 @@ func process(opts *TransformOptions, dbc *util.DBC) (int64, int64, error) {
 	if inputCount, err = selectCount(dbc, opts.Loc.SrsRecords); err != nil {
 		return 0, 0, err
 	}
-	printerr("%d input rows", inputCount)
+	if opts.Verbose >= 1 {
+		printerr("%d input rows", inputCount)
+	}
 	// main processing
 	if inputCount > 0 {
-		if writeCount, err = processAll(opts, dbc, store); err != nil {
+		if writeCount, err = processAll(opts, dbc, store, printerr); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -337,7 +356,7 @@ func selectCount(dbc *util.DBC, tablein string) (int64, error) {
 	return count, nil
 }
 
-func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store) (int64, error) {
+func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store, printerr PrintErr) (int64, error) {
 	startTime := time.Now()
 
 	var err error
@@ -382,7 +401,9 @@ func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store) (int6
 					return 0, fmt.Errorf("writing record: %v: %v", err, record)
 				}
 				if msg != nil {
-					printerr("skipping line in record: %s: %s", *id, *msg)
+					if opts.Verbose >= 1 {
+						printerr("skipping line in record: %s: %s", *id, *msg)
+					}
 					continue
 				}
 				writeCount++
@@ -401,7 +422,9 @@ func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store) (int6
 		return 0, err
 	}
 
-	printerr(" %s transform", util.ElapsedTime(startTime))
+	if opts.Verbose >= 1 {
+		printerr(" %s transform", util.ElapsedTime(startTime))
+	}
 
 	startTime = time.Now()
 
@@ -421,12 +444,14 @@ func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store) (int6
 		src.Close()
 	}
 
-	printerr(" %s load", util.ElapsedTime(startTime))
+	if opts.Verbose >= 1 {
+		printerr(" %s load", util.ElapsedTime(startTime))
+	}
 
 	return writeCount, nil
 }
 
-func index(opts *TransformOptions, dbc *util.DBC) error {
+func index(opts *TransformOptions, dbc *util.DBC, printerr PrintErr) error {
 	startIndex := time.Now()
 	var err error
 	// Index columns
@@ -439,16 +464,18 @@ func index(opts *TransformOptions, dbc *util.DBC) error {
 	if opts.TrigramIndex {
 		cols = append(cols, "content")
 	}
-	if err = indexColumns(opts, dbc, cols); err != nil {
+	if err = indexColumns(opts, dbc, cols, printerr); err != nil {
 		return err
 	}
-	printerr(" %s index", util.ElapsedTime(startIndex))
+	if opts.Verbose >= 1 {
+		printerr(" %s index", util.ElapsedTime(startIndex))
+	}
 	return nil
 }
 
-func indexColumns(opts *TransformOptions, dbc *util.DBC, cols []string) error {
+func indexColumns(opts *TransformOptions, dbc *util.DBC, cols []string, printerr PrintErr) error {
 	for _, c := range cols {
-		if opts.Verbose {
+		if opts.Verbose >= 2 {
 			printerr("creating index: %s", c)
 		}
 		if c == "content" {
@@ -602,6 +629,6 @@ func readConfigLDP1(opts *TransformOptions) (string, string, string, string, str
 	return host, port, user, password, dbname, sslmode, nil
 }
 
-func printerr(format string, v ...any) {
-	_, _ = fmt.Fprintf(os.Stderr, "%s: %s\n", "LDPMARC", fmt.Sprintf(format, v...))
-}
+//func printerr(format string, v ...any) {
+//	_, _ = fmt.Fprintf(os.Stderr, "%s: %s\n", "LDPMARC", fmt.Sprintf(format, v...))
+//}

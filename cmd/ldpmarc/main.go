@@ -60,19 +60,24 @@ func main() {
 	if *ldpUserFlag != "" {
 		users = append(users, *ldpUserFlag)
 	}
+	verbose := 1
+	if *verboseFlag {
+		verbose = 2
+	}
 	opt := &marc.TransformOptions{
 		FullUpdate:   *fullUpdateFlag,
 		Datadir:      *datadirFlag,
 		Users:        users,
 		TrigramIndex: *trigramIndexFlag,
 		NoIndexes:    *noIndexesFlag,
-		Verbose:      *verboseFlag,
+		Verbose:      verbose,
 		CSVFileName:  *csvFilenameFlag,
 		SRSRecords:   *srsRecordsFlag,
 		SRSMarc:      *srsMarcFlag,
 		SRSMarcAttr:  *srsMarcAttrFlag,
 		Metadb:       *metadbFlag,
 		Vacuum:       true,
+		PrintErr:     printerr,
 	}
 	if err := marc.Run(opt); err != nil {
 		printerr("%s", err)

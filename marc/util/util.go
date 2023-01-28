@@ -15,7 +15,7 @@ func MD5(srsMarcAttr string) string {
 	return "md5(coalesce(r.external_hrid::text, '') || coalesce(r.matched_id::text, '') || coalesce(r.state::text, '') || coalesce(m." + srsMarcAttr + "::text, ''))"
 }
 
-func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(string, ...interface{}), verbose bool) (*string, *string, *string, string, []srs.Marc, bool) {
+func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(string, ...interface{}), verbose int) (*string, *string, *string, string, []srs.Marc, bool) {
 	if id == nil {
 		printerr(skipValue(id, data))
 		return nil, nil, nil, "", nil, true
@@ -51,7 +51,7 @@ func Transform(id, matchedID, instanceHRID, state, data *string, printerr func(s
 		printerr(skipError(id, err))
 		return nil, nil, nil, "", nil, true
 	}
-	if verbose && len(mrecs) != 0 {
+	if verbose >= 2 && len(mrecs) != 0 {
 		printerr("updating: id=%s", *id)
 	}
 	return id, matchedID, instanceHRID, instanceID, mrecs, false
