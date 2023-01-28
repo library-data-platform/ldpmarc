@@ -401,9 +401,7 @@ func processAll(opts *TransformOptions, dbc *util.DBC, store *local.Store, print
 					return 0, fmt.Errorf("writing record: %v: %v", err, record)
 				}
 				if msg != nil {
-					if opts.Verbose >= 1 {
-						printerr("skipping line in record: %s: %s", *id, *msg)
-					}
+					printerr("skipping line in record: %s: %s", *id, *msg)
 					continue
 				}
 				writeCount++
