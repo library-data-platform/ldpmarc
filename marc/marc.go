@@ -166,7 +166,7 @@ func setupLocations(opts *TransformOptions) Locations {
 		SrsMarc:          "folio_source_record.marc_records_lb",
 		SrsMarcAttr:      "content",
 		TablefinalSchema: "folio_source_record",
-		TablefinalTable:  "marctab",
+		TablefinalTable:  "marc__t",
 	}
 	if !opts.Metadb { // LDP1
 		loc.SrsRecords = "public.srs_records"
@@ -490,9 +490,14 @@ func indexColumns(opts *TransformOptions, dbc *util.DBC, cols []string, printerr
 }
 
 func replace(opts *TransformOptions, dbc *util.DBC) error {
-	// Transitional: clean up pre-Metadb table
-	q := "DROP TABLE IF EXISTS public.srs_marctab"
+	// Clean up old tables
+	q := "DROP TABLE IF EXISTS folio_source_record.marctab"
 	_, err := dbc.Conn.Exec(context.TODO(), q)
+	if err != nil {
+		return fmt.Errorf("dropping table: %s", err)
+	}
+	q = "DROP TABLE IF EXISTS public.srs_marctab"
+	_, err = dbc.Conn.Exec(context.TODO(), q)
 	if err != nil {
 		return fmt.Errorf("dropping table: %s", err)
 	}

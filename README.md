@@ -28,7 +28,8 @@ System requirements
     same zone/subnet); Aurora is not supported
 * One of the following SRS data sources:
   * [LDP1](https://github.com/library-data-platform/ldp) 1.7 or later
-  * [Metadb](https://github.com/metadb-project/metadb) 1.0
+  * [Metadb](https://github.com/metadb-project/metadb) (ldpmarc
+    installation not required for Metadb 1.0 or later)
   * [LDLite](https://github.com/library-data-platform/ldlite)
 * Required to build from source:
   * [Go](https://golang.org/) 1.19 or later
@@ -105,11 +106,12 @@ done
 ```
 
 
-Running ldpmarc with Metadb 1.0
--------------------------------
+Running ldpmarc with Metadb
+---------------------------
 
-The usage for ldpmarc with Metadb 1.0 is similar to running it with
-LDP1.
+**Beginning with Metadb 1.0, ldpmarc is automatically installed and
+run by Metadb.  The following instructions are for Metadb versions
+earlier than 1.0.**
 
 When running ldpmarc, the `-M` option should be added to enable
 compatibility with Metadb, for example:
@@ -119,14 +121,16 @@ compatibility with Metadb, for example:
 ldpmarc -D data -M
 ```
 
-The transformed output is written to the table `folio_source_record.marctab`.
+The transformed output is written to the table
+`folio_source_record.marc__t`.  (Releases of ldpmarc 1.6 and earlier
+write to the table `folio_source_record.marctab` instead.)
 
 To grant privileges to Metadb users:
 
 ```
 users=/path/to/list/of/users.txt
 for u in $( cat $users ); do
-    psql -c "GRANT SELECT ON folio_source_record.marctab TO $u ;"  (etc.)
+    psql -c "GRANT SELECT ON folio_source_record.marc__t TO $u ;"  (etc.)
 done
 ```
 
@@ -152,16 +156,19 @@ update.
 Resetting ldpmarc
 -----------------
 
-All ldpmarc data can be deleted from the database by dropping these
-tables:
+All ldpmarc data can be deleted from the database by dropping the
+following tables.  This may be useful for completely resetting
+ldpmarc.
 
+For LDP1:
 ```
-DROP TABLE IF EXISTS folio_source_record.marctab,
-    marctab._srs_marctab, marctab.cksum,
-    marctab.metadata, public.srs_marctab;
+DROP TABLE IF EXISTS public.srs_marctab, marctab.cksum, marctab.metadata, marctab._srs_marctab;
 ```
 
-This may be useful for completely resetting ldpmarc.
+For Metadb:
+```
+DROP TABLE IF EXISTS folio_source_record.marc__t, marctab.cksum, marctab.metadata, marctab._srs_marctab, folio_source_record.marctab;
+```
 
 
 Running ldpmarc with Docker
