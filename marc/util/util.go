@@ -78,10 +78,27 @@ func nullString(s *string) string {
 }
 
 func VacuumAnalyze(ctx context.Context, dbc *DBC, table string) error {
-	var err error
-	q := "VACUUM ANALYZE " + table + ";"
-	if _, err = dbc.Conn.Exec(ctx, q); err != nil {
+	if err := Vacuum(ctx, dbc, table); err != nil {
+		return err
+	}
+	if err := Analyze(ctx, dbc, table); err != nil {
+		return err
+	}
+	return nil
+}
+
+func Vacuum(ctx context.Context, dbc *DBC, table string) error {
+	q := "VACUUM (PARALLEL 0) " + table
+	if _, err := dbc.Conn.Exec(ctx, q); err != nil {
 		return fmt.Errorf("vacuuming table: %s: %s", table, err)
+	}
+	return nil
+}
+
+func Analyze(ctx context.Context, dbc *DBC, table string) error {
+	q := "ANALYZE " + table
+	if _, err := dbc.Conn.Exec(ctx, q); err != nil {
+		return fmt.Errorf("analyzing table: %s: %s", table, err)
 	}
 	return nil
 }

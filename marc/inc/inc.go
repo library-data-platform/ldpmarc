@@ -93,17 +93,15 @@ func CreateCksum(dbc *util.DBC, srsRecords, srsMarc, srsMarctab, srsMarcAttr str
 
 func VacuumCksum(ctx context.Context, dbc *util.DBC) error {
 	var err error
-	if err = util.VacuumAnalyze(ctx, dbc, cksumTable); err != nil {
-		return err
-	}
-	if err = util.VacuumAnalyze(ctx, dbc, metadataTable); err != nil {
+	if err = util.Vacuum(ctx, dbc, cksumTable); err != nil {
 		return err
 	}
 	return nil
 }
 
-func IncrementalUpdate(connString string, srsRecords, srsMarc, srsMarcAttr, tablefinal string, printerr func(string, ...any),
-	verbose int, vacuum bool) error {
+func IncrementalUpdate(connString string, srsRecords, srsMarc, srsMarcAttr, tablefinal string,
+	printerr func(string, ...any), verbose int) error {
+
 	var err error
 	startUpdate := time.Now()
 	conn, err := pgx.Connect(context.TODO(), connString)
@@ -117,6 +115,9 @@ func IncrementalUpdate(connString string, srsRecords, srsMarc, srsMarcAttr, tabl
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Hour))
 	defer cancel()
+	// Vacuum in case previous run was not completed.
+	_ = util.Vacuum(ctx, dbc, tablefinal)
+	_ = VacuumCksum(ctx, dbc)
 	// add new data
 	if err = updateNew(ctx, dbc, srsRecords, srsMarc, srsMarcAttr, tablefinal, printerr, verbose); err != nil {
 		return fmt.Errorf("new: %s", err)
@@ -130,17 +131,15 @@ func IncrementalUpdate(connString string, srsRecords, srsMarc, srsMarcAttr, tabl
 		return fmt.Errorf("change: %s", err)
 	}
 	// vacuum
-	if vacuum {
-		startVacuum := time.Now()
-		if err = util.VacuumAnalyze(ctx, dbc, tablefinal); err != nil {
-			return fmt.Errorf("vacuum analyze: %s", err)
-		}
-		if err = VacuumCksum(ctx, dbc); err != nil {
-			return fmt.Errorf("vacuum cksum: %s", err)
-		}
-		if verbose >= 1 {
-			printerr(" %s vacuum", util.ElapsedTime(startVacuum))
-		}
+	startVacuum := time.Now()
+	if err = util.Vacuum(ctx, dbc, tablefinal); err != nil {
+		return fmt.Errorf("vacuum: %s", err)
+	}
+	if err = VacuumCksum(ctx, dbc); err != nil {
+		return fmt.Errorf("vacuum cksum: %s", err)
+	}
+	if verbose >= 1 {
+		printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 	}
 	if verbose >= 1 {
 		printerr("%s incremental update", util.ElapsedTime(startUpdate))

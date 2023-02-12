@@ -29,7 +29,6 @@ type TransformOptions struct {
 	SRSMarc      string
 	SRSMarcAttr  string
 	Metadb       bool
-	Vacuum       bool
 	PrintErr     PrintErr
 	Loc          Locations
 }
@@ -121,7 +120,7 @@ func Run(opts *TransformOptions) error {
 				opts.PrintErr("starting incremental update")
 			}
 			err = inc.IncrementalUpdate(connString, opts.Loc.SrsRecords, opts.Loc.SrsMarc, opts.Loc.SrsMarcAttr,
-				opts.Loc.tablefinal(), opts.PrintErr, opts.Verbose, opts.Vacuum)
+				opts.Loc.tablefinal(), opts.PrintErr, opts.Verbose)
 			if err != nil {
 				opts.PrintErr("restarting with full update due to early termination: %v", err)
 				retry = true
@@ -194,6 +193,9 @@ func fullUpdate(opts *TransformOptions, connString string, printerr PrintErr) er
 		Conn:       conn,
 		ConnString: connString,
 	}
+	// Vacuum in case previous run was not completed.
+	_ = util.Vacuum(context.TODO(), dbc, opts.Loc.tablefinal())
+	_ = inc.VacuumCksum(context.TODO(), dbc)
 	if opts.CSVFileName != "" {
 		if csvFile, err = os.Create(opts.CSVFileName); err != nil {
 			return err
@@ -238,17 +240,15 @@ func fullUpdate(opts *TransformOptions, connString string, printerr PrintErr) er
 			if opts.Verbose >= 1 {
 				printerr(" %s checksum", util.ElapsedTime(startCksum))
 			}
-			if opts.Vacuum {
-				startVacuum := time.Now()
-				if err = util.VacuumAnalyze(context.TODO(), dbc, opts.Loc.tablefinal()); err != nil {
-					return err
-				}
-				if err = inc.VacuumCksum(context.TODO(), dbc); err != nil {
-					return err
-				}
-				if opts.Verbose >= 1 {
-					printerr(" %s vacuum", util.ElapsedTime(startVacuum))
-				}
+			startVacuum := time.Now()
+			if err = util.Vacuum(context.TODO(), dbc, opts.Loc.tablefinal()); err != nil {
+				return err
+			}
+			if err = inc.VacuumCksum(context.TODO(), dbc); err != nil {
+				return err
+			}
+			if opts.Verbose >= 1 {
+				printerr(" %s vacuum", util.ElapsedTime(startVacuum))
 			}
 		}
 		if opts.Verbose >= 1 {

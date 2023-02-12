@@ -76,7 +76,6 @@ func main() {
 		SRSMarc:      *srsMarcFlag,
 		SRSMarcAttr:  *srsMarcAttrFlag,
 		Metadb:       *metadbFlag,
-		Vacuum:       true,
 		PrintErr:     printerr,
 	}
 	if err := marc.Run(opt); err != nil {
