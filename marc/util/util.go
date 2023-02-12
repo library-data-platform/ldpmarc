@@ -77,10 +77,10 @@ func nullString(s *string) string {
 	}
 }
 
-func VacuumAnalyze(dbc *DBC, table string) error {
+func VacuumAnalyze(ctx context.Context, dbc *DBC, table string) error {
 	var err error
 	q := "VACUUM ANALYZE " + table + ";"
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	if _, err = dbc.Conn.Exec(ctx, q); err != nil {
 		return fmt.Errorf("vacuuming table: %s: %s", table, err)
 	}
 	return nil

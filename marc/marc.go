@@ -100,61 +100,44 @@ func Run(opts *TransformOptions) error {
 			return err
 		}
 	}
-	var dbc = new(util.DBC)
-	dbc.ConnString = "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" +
+	connString := "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" +
 		dbname + " sslmode=" + sslmode
-	if dbc.Conn, err = pgx.Connect(context.TODO(), dbc.ConnString); err != nil {
+	conn, err := pgx.Connect(context.TODO(), connString)
+	if err != nil {
 		return err
 	}
-	defer dbc.Conn.Close(context.TODO())
-	if err = setupSchema(dbc); err != nil {
+	defer conn.Close(context.TODO())
+	if err = setupSchema(conn); err != nil {
 		return fmt.Errorf("setting up schema: %v", err)
 	}
 	var incUpdateAvail bool
-	if incUpdateAvail, err = inc.IncUpdateAvail(dbc); err != nil {
+	if incUpdateAvail, err = inc.IncUpdateAvail(conn); err != nil {
 		return err
 	}
-	if incUpdateAvail && !opts.FullUpdate && opts.CSVFileName == "" {
-		if opts.Verbose >= 1 {
-			opts.PrintErr("starting incremental update")
-		}
-		if err = inc.IncUpdate(dbc, opts.Loc.SrsRecords, opts.Loc.SrsMarc, opts.Loc.SrsMarcAttr,
-			opts.Loc.tablefinal(), opts.PrintErr, opts.Verbose, opts.Vacuum); err != nil {
-			return err
-		}
-	} else {
-		if opts.Verbose >= 1 {
-			opts.PrintErr("starting full update")
-		}
-		//// Catch SIGTERM etc.
-		//c := make(chan os.Signal, 2)
-		//signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		//go func() {
-		//	for range c {
-		//		_, _ = fmt.Fprintf(os.Stderr, "\nldpmarc: canceling due to user request\n")
-		//		_, _ = fmt.Fprintf(os.Stderr, "ldpmarc: cleaning up temporary files\n")
-		//		var conn *pgx.Conn
-		//		conn, err = pgx.Connect(context.TODO(), dbc.ConnString)
-		//		if err == nil {
-		//			_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
-		//			for _, field := range allFields {
-		//				_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout+field)
-		//			}
-		//			_ = conn.Close(context.TODO())
-		//		}
-		//		os.Exit(130)
-		//	}
-		//}()
-		// Run full update
-		if err = fullUpdate(opts, dbc, opts.PrintErr); err != nil {
-			var err2 error
-			var conn *pgx.Conn
-			conn, err2 = pgx.Connect(context.TODO(), dbc.ConnString)
-			if err2 == nil {
-				_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
-				_ = conn.Close(context.TODO())
+	var retry bool
+	for {
+		if !retry && incUpdateAvail && !opts.FullUpdate && opts.CSVFileName == "" {
+			if opts.Verbose >= 1 {
+				opts.PrintErr("starting incremental update")
 			}
-			return err
+			err = inc.IncrementalUpdate(connString, opts.Loc.SrsRecords, opts.Loc.SrsMarc, opts.Loc.SrsMarcAttr,
+				opts.Loc.tablefinal(), opts.PrintErr, opts.Verbose, opts.Vacuum)
+			if err != nil {
+				opts.PrintErr("restarting with full update due to early termination: %v", err)
+				retry = true
+			}
+		} else {
+			retry = false
+			if opts.Verbose >= 1 {
+				opts.PrintErr("starting full update")
+			}
+			if err = fullUpdate(opts, connString, opts.PrintErr); err != nil {
+				_, _ = conn.Exec(context.TODO(), "DROP TABLE IF EXISTS "+tableout)
+				return err
+			}
+		}
+		if !retry {
+			break
 		}
 	}
 	return nil
@@ -187,21 +170,30 @@ func setupLocations(opts *TransformOptions) Locations {
 	return loc
 }
 
-func setupSchema(dbc *util.DBC) error {
+func setupSchema(dc *pgx.Conn) error {
 	var err error
-	if _, err = dbc.Conn.Exec(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
+	if _, err = dc.Exec(context.TODO(), "CREATE SCHEMA IF NOT EXISTS "+tableoutSchema); err != nil {
 		return fmt.Errorf("creating schema: %s", err)
 	}
 	var q = "COMMENT ON SCHEMA " + tableoutSchema + " IS 'system tables for SRS MARC transform'"
-	if _, err = dbc.Conn.Exec(context.TODO(), q); err != nil {
+	if _, err = dc.Exec(context.TODO(), q); err != nil {
 		return fmt.Errorf("adding comment on schema: %s", err)
 	}
 	return nil
 }
 
-func fullUpdate(opts *TransformOptions, dbc *util.DBC, printerr PrintErr) error {
-	startUpdate := time.Now()
+func fullUpdate(opts *TransformOptions, connString string, printerr PrintErr) error {
 	var err error
+	startUpdate := time.Now()
+	conn, err := pgx.Connect(context.TODO(), connString)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(context.TODO())
+	dbc := &util.DBC{
+		Conn:       conn,
+		ConnString: connString,
+	}
 	if opts.CSVFileName != "" {
 		if csvFile, err = os.Create(opts.CSVFileName); err != nil {
 			return err
@@ -248,10 +240,10 @@ func fullUpdate(opts *TransformOptions, dbc *util.DBC, printerr PrintErr) error 
 			}
 			if opts.Vacuum {
 				startVacuum := time.Now()
-				if err = util.VacuumAnalyze(dbc, opts.Loc.tablefinal()); err != nil {
+				if err = util.VacuumAnalyze(context.TODO(), dbc, opts.Loc.tablefinal()); err != nil {
 					return err
 				}
-				if err = inc.VacuumCksum(dbc); err != nil {
+				if err = inc.VacuumCksum(context.TODO(), dbc); err != nil {
 					return err
 				}
 				if opts.Verbose >= 1 {
