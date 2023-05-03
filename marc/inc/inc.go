@@ -104,7 +104,7 @@ func IncrementalUpdate(connString string, srsRecords, srsMarc, srsMarcAttr, tabl
 
 	var err error
 	startUpdate := time.Now()
-	conn, err := pgx.Connect(context.TODO(), connString)
+	conn, err := util.ConnectDB(context.TODO(), connString)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func updateNew(ctx context.Context, dbc *util.DBC, srsRecords, srsMarc, srsMarcA
 		return fmt.Errorf("vacuum analyze: %s", err)
 	}
 	var connw *pgx.Conn
-	if connw, err = pgx.Connect(ctx, dbc.ConnString); err != nil {
+	if connw, err = util.ConnectDB(ctx, dbc.ConnString); err != nil {
 		return err
 	}
 	defer connw.Close(ctx)
@@ -273,7 +273,7 @@ func updateDelete(ctx context.Context, dbc *util.DBC, srsRecords, tablefinal str
 		rows.Close()
 	}
 	var connw *pgx.Conn
-	if connw, err = pgx.Connect(ctx, dbc.ConnString); err != nil {
+	if connw, err = util.ConnectDB(ctx, dbc.ConnString); err != nil {
 		return fmt.Errorf("opening connection for writing: %v", err)
 	}
 	defer connw.Close(ctx)
@@ -322,13 +322,13 @@ func updateChange(ctx context.Context, dbc *util.DBC, srsRecords, srsMarc, srsMa
 	}
 	// connR is used for queries concurrent with reading rows.
 	var connR *pgx.Conn
-	if connR, err = pgx.Connect(ctx, dbc.ConnString); err != nil {
+	if connR, err = util.ConnectDB(ctx, dbc.ConnString); err != nil {
 		return fmt.Errorf("opening connection for reading: %s", err)
 	}
 	defer connR.Close(ctx)
 	// connW is used to write the changes.
 	var connW *pgx.Conn
-	if connW, err = pgx.Connect(ctx, dbc.ConnString); err != nil {
+	if connW, err = util.ConnectDB(ctx, dbc.ConnString); err != nil {
 		return fmt.Errorf("opening connection for writing: %s", err)
 	}
 	defer connW.Close(ctx)

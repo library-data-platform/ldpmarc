@@ -101,7 +101,7 @@ func Run(opts *TransformOptions) error {
 	}
 	connString := "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" +
 		dbname + " sslmode=" + sslmode
-	conn, err := pgx.Connect(context.TODO(), connString)
+	conn, err := util.ConnectDB(context.TODO(), connString)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func setupSchema(dc *pgx.Conn) error {
 func fullUpdate(opts *TransformOptions, connString string, printerr PrintErr) error {
 	var err error
 	startUpdate := time.Now()
-	conn, err := pgx.Connect(context.TODO(), connString)
+	conn, err := util.ConnectDB(context.TODO(), connString)
 	if err != nil {
 		return err
 	}

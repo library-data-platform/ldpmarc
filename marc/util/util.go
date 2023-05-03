@@ -147,3 +147,35 @@ type DBC struct {
 func ElapsedTime(start time.Time) string {
 	return fmt.Sprintf("[%.4f h]", time.Since(start).Hours())
 }
+
+func setDatabaseParameters(ctx context.Context, dc *pgx.Conn) error {
+	q := "SET idle_in_transaction_session_timeout=0"
+	if _, err := dc.Exec(ctx, q); err != nil {
+		return err
+	}
+	q = "SET idle_session_timeout=0"
+	if _, err := dc.Exec(ctx, q); err != nil {
+		return err
+	}
+	q = "SET statement_timeout=0"
+	if _, err := dc.Exec(ctx, q); err != nil {
+		return err
+	}
+	q = "SET timezone='UTC'"
+	if _, err := dc.Exec(ctx, q); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ConnectDB(ctx context.Context, connString string) (*pgx.Conn, error) {
+	dc, err := pgx.Connect(ctx, connString)
+	if err != nil {
+		return nil, err
+	}
+	err = setDatabaseParameters(context.TODO(), dc)
+	if err != nil {
+		return nil, err
+	}
+	return dc, nil
+}
